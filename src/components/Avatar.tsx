@@ -11,61 +11,18 @@ const expressions = [
   "empathetic",
 ];
 
-const Avatar = ({ expressionState = "neutral", isSpeaking = false }) => {
+interface AvatarProps {
+  expressionState?: string;
+  isSpeaking?: boolean;
+}
+
+const Avatar: React.FC<AvatarProps> = ({ expressionState = "neutral", isSpeaking = false }) => {
   const [currentExpression, setCurrentExpression] = useState(expressionState);
   const avatarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setCurrentExpression(expressionState);
   }, [expressionState]);
-
-  // This function would be replaced with actual 3D avatar rendering
-  const renderFace = () => {
-    return (
-      <div className="relative w-full h-full flex items-center justify-center">
-        {/* Face shape */}
-        <div className="w-48 h-64 bg-gradient-to-b from-[#FFE6E6] to-[#FFD6D6] rounded-[40%] relative">
-          {/* Eyes */}
-          <div className="absolute w-8 h-4 bg-white rounded-full top-[35%] left-[25%] flex items-center justify-center">
-            <div 
-              className={`w-4 h-4 bg-[#3B4252] rounded-full ${
-                currentExpression === "thinking" ? "animate-pulse" : ""
-              }`}
-            />
-          </div>
-          <div className="absolute w-8 h-4 bg-white rounded-full top-[35%] right-[25%] flex items-center justify-center">
-            <div 
-              className={`w-4 h-4 bg-[#3B4252] rounded-full ${
-                currentExpression === "thinking" ? "animate-pulse" : ""
-              }`}
-            />
-          </div>
-
-          {/* Mouth */}
-          <div 
-            className={`absolute w-16 h-4 rounded-full bottom-[25%] left-1/2 transform -translate-x-1/2 
-              ${currentExpression === "happy" || currentExpression === "empathetic" 
-                ? "border-t-4 border-[#3B4252]" 
-                : currentExpression === "speaking"
-                ? "bg-[#3B4252] animate-pulse" 
-                : "border-b-4 border-[#3B4252]"}`}
-          />
-          
-          {/* Eyebrows */}
-          <div 
-            className={`absolute w-10 h-1 bg-[#3B4252] top-[28%] left-[22%] transform ${
-              currentExpression === "empathetic" ? "rotate-12" : currentExpression === "thinking" ? "-rotate-12" : ""
-            }`}
-          />
-          <div 
-            className={`absolute w-10 h-1 bg-[#3B4252] top-[28%] right-[22%] transform ${
-              currentExpression === "empathetic" ? "-rotate-12" : currentExpression === "thinking" ? "rotate-12" : ""
-            }`}
-          />
-        </div>
-      </div>
-    );
-  };
 
   return (
     <motion.div
@@ -97,7 +54,36 @@ const Avatar = ({ expressionState = "neutral", isSpeaking = false }) => {
         </>
       )}
       
-      {renderFace()}
+      {/* Modern AI assistant image */}
+      <div className="relative w-full h-full flex items-center justify-center">
+        <img 
+          src="/lovable-uploads/07d8bf0e-b85b-4e06-8e19-1058cb514108.png" 
+          alt="AI Assistant" 
+          className="w-full h-full object-cover"
+        />
+        
+        {/* Optional: Add a call-to-action button overlay that responds to the expression state */}
+        {currentExpression === "neutral" && (
+          <div className="absolute bottom-4 w-full flex justify-center">
+            <div className="bg-white/80 backdrop-blur-sm text-black px-4 py-2 rounded-full flex items-center gap-2 text-sm font-medium">
+              <span className="w-4 h-4 bg-black rounded-full flex items-center justify-center">
+                <motion.span 
+                  className="block w-2 h-2 bg-white"
+                  animate={{ 
+                    height: [2, 6, 2],
+                  }}
+                  transition={{
+                    duration: 1,
+                    repeat: Infinity,
+                    repeatType: "reverse",
+                  }}
+                />
+              </span>
+              Try a call
+            </div>
+          </div>
+        )}
+      </div>
     </motion.div>
   );
 };

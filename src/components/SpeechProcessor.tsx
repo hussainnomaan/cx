@@ -5,16 +5,16 @@ import { toast } from "@/components/ui/use-toast";
 // Add SpeechRecognition to window interface
 declare global {
   interface Window {
-    SpeechRecognition?: typeof SpeechRecognition;
-    webkitSpeechRecognition?: typeof SpeechRecognition;
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
   }
 }
 
 interface SpeechProcessorProps {
   onSpeechStart: () => void;
   onSpeechEnd: () => void;
-  onUserMessage: (message: string) => void;
-  onTherapistSpeaking: (isSpeaking: boolean) => void;
+  onUserMessage: (text: string) => void;
+  onTherapistSpeaking: (speaking: boolean) => void;
   onExpressionChange: (expression: string) => void;
 }
 
