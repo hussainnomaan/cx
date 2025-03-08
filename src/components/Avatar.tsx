@@ -58,7 +58,7 @@ const Avatar: React.FC<AvatarProps> = ({ expressionState = "neutral", isSpeaking
       <div className="relative w-full h-full flex items-center justify-center">
         <div className="absolute inset-0 w-full h-full rounded-full overflow-hidden">
           {/* Dynamic gradient background */}
-          <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-therapy-blue via-therapy-pink to-therapy-blue-dark animate-gradient-x">
+          <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 animate-gradient-x">
             {/* Inner dynamic effects */}
             <div className="absolute inset-0 w-full h-full opacity-70 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-white/20 to-transparent animate-pulse"></div>
           </div>
@@ -116,7 +116,7 @@ const Avatar: React.FC<AvatarProps> = ({ expressionState = "neutral", isSpeaking
             >
               {isSpeaking && (
                 <motion.div 
-                  className="w-full h-full bg-gradient-to-r from-therapy-blue-dark to-therapy-pink-dark"
+                  className="w-full h-full bg-gradient-to-r from-indigo-600 to-purple-600"
                   animate={{
                     x: ["-25%", "0%", "25%", "0%", "-25%"]
                   }}
@@ -159,7 +159,7 @@ const Avatar: React.FC<AvatarProps> = ({ expressionState = "neutral", isSpeaking
         {currentExpression === "neutral" && (
           <div className="absolute bottom-4 w-full flex justify-center">
             <div className="bg-white/80 backdrop-blur-sm text-black px-4 py-2 rounded-full flex items-center gap-2 text-sm font-medium">
-              <span className="w-4 h-4 bg-black rounded-full flex items-center justify-center">
+              <span className="w-4 h-4 bg-indigo-600 rounded-full flex items-center justify-center">
                 <motion.span 
                   className="block w-2 h-2 bg-white"
                   animate={{ 

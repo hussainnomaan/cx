@@ -36,7 +36,7 @@ const Index = () => {
   }, [toast]);
 
   return (
-    <div className="min-h-screen therapy-gradient-bg overflow-hidden">
+    <div className="min-h-screen futuristic-gradient-bg overflow-hidden">
       <motion.div
         className="w-full min-h-screen"
         initial={{ opacity: 0 }}
@@ -46,7 +46,7 @@ const Index = () => {
         <ConversationUI />
         
         {/* Footer */}
-        <footer className="w-full text-center py-4 text-xs text-muted-foreground">
+        <footer className="w-full text-center py-4 text-xs text-white/80">
           <p>AI Therapist is for demonstration purposes only and not a substitute for professional help.</p>
           <p className="mt-1">
             If you're experiencing a mental health crisis, please contact a mental health professional.
