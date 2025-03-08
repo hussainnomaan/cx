@@ -19,7 +19,7 @@ const ConversationUI = () => {
   useEffect(() => {
     // Add initial greeting
     setTimeout(() => {
-      const initialMessage = {
+      const initialMessage: Message = {
         text: "Hello, I'm here to listen and support you. How are you feeling today?",
         sender: 'therapist',
         timestamp: new Date()
@@ -46,7 +46,7 @@ const ConversationUI = () => {
   };
 
   const handleUserMessage = (text: string) => {
-    const newMessage = {
+    const newMessage: Message = {
       text,
       sender: 'user',
       timestamp: new Date()

@@ -132,8 +132,26 @@ export default {
 				'fade-out': 'fade-out 0.5s ease-out',
 				'slide-in': 'slide-in 0.3s ease-out',
 				blob: 'blob 7s infinite'
+			},
+			// Add animation delay utilities
+			animationDelay: {
+				'2000': '2s',
+				'4000': '4s',
 			}
 		}
 	},
-	plugins: [require("tailwindcss-animate")],
+	plugins: [
+		require("tailwindcss-animate"),
+		function({ addUtilities, theme }: any) {
+			const animationDelays = theme('animationDelay', {});
+			const utilities = Object.entries(animationDelays).reduce(
+				(acc, [key, value]) => ({
+					...acc,
+					[`.animation-delay-${key}`]: { animationDelay: value },
+				}),
+				{}
+			);
+			addUtilities(utilities);
+		},
+	],
 } satisfies Config;

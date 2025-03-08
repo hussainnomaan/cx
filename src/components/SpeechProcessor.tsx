@@ -2,6 +2,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from "@/components/ui/use-toast";
 
+// Add SpeechRecognition to window interface
+declare global {
+  interface Window {
+    SpeechRecognition?: typeof SpeechRecognition;
+    webkitSpeechRecognition?: typeof SpeechRecognition;
+  }
+}
+
 interface SpeechProcessorProps {
   onSpeechStart: () => void;
   onSpeechEnd: () => void;
@@ -25,43 +33,44 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
   // Initial setup of speech recognition
   useEffect(() => {
     if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      
-      recognitionRef.current.onstart = () => {
-        setIsListening(true);
-        onExpressionChange('listening');
-      };
-      
-      recognitionRef.current.onresult = (event: any) => {
-        const current = event.resultIndex;
-        const result = event.results[current];
-        const transcriptText = result[0].transcript;
-        setTranscript(transcriptText);
+      const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognitionAPI) {
+        recognitionRef.current = new SpeechRecognitionAPI();
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
         
-        if (result.isFinal) {
-          onSpeechEnd();
-          onUserMessage(transcriptText);
-          setTranscript('');
-          onExpressionChange('thinking');
+        recognitionRef.current.onstart = () => {
+          setIsListening(true);
+          onExpressionChange('listening');
+        };
+        
+        recognitionRef.current.onresult = (event: any) => {
+          const current = event.resultIndex;
+          const result = event.results[current];
+          const transcriptText = result[0].transcript;
+          setTranscript(transcriptText);
           
-          // Simulate AI processing and response
-          simulateAIResponse(transcriptText);
-        }
-      };
-      
-      recognitionRef.current.onerror = (event: any) => {
-        console.error('Speech recognition error', event.error);
-        setIsListening(false);
-        onSpeechEnd();
-      };
-      
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-      };
-      
+          if (result.isFinal) {
+            onSpeechEnd();
+            onUserMessage(transcriptText);
+            setTranscript('');
+            onExpressionChange('thinking');
+            
+            // Simulate AI processing and response
+            simulateAIResponse(transcriptText);
+          }
+        };
+        
+        recognitionRef.current.onerror = (event: any) => {
+          console.error('Speech recognition error', event.error);
+          setIsListening(false);
+          onSpeechEnd();
+        };
+        
+        recognitionRef.current.onend = () => {
+          setIsListening(false);
+        };
+      }
     } else {
       toast({
         title: "Speech Recognition Not Supported",
