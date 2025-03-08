@@ -1,4 +1,4 @@
-
+<lov-codelov-code>
 import type { Config } from "tailwindcss";
 
 export default {
@@ -119,6 +119,10 @@ export default {
 					'33%': { transform: 'translate(30px, -50px) scale(1.1)' },
 					'66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
 					'100%': { transform: 'translate(0px, 0px) scale(1)' }
+				},
+				'gradient-x': {
+					'0%, 100%': { backgroundPosition: '0% 50%' },
+					'50%': { backgroundPosition: '100% 50%' }
 				}
 			},
 			animation: {
@@ -131,7 +135,8 @@ export default {
 				'fade-in': 'fade-in 0.5s ease-out',
 				'fade-out': 'fade-out 0.5s ease-out',
 				'slide-in': 'slide-in 0.3s ease-out',
-				blob: 'blob 7s infinite'
+				blob: 'blob 7s infinite',
+				'gradient-x': 'gradient-x 15s ease infinite'
 			},
 			// Add animation delay utilities
 			animationDelay: {
@@ -155,3 +160,4 @@ export default {
 		},
 	],
 } satisfies Config;
+</lov-code>
