@@ -33,34 +33,45 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   useEffect(() => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
-      
-      audioRef.current.onplay = () => {
-        onTherapistSpeaking(true);
-        onExpressionChange('speaking');
-      };
-      
-      audioRef.current.onended = () => {
-        onTherapistSpeaking(false);
-        onExpressionChange('neutral');
-        
-        // Resume listening after AI finishes speaking
-        if (!isListening && !isProcessing) {
-          startListening();
-        }
-      };
+    // Initialize AudioContext
+    if (!audioContextRef.current) {
+      try {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      } catch (error) {
+        console.error("Error creating AudioContext:", error);
+        toast({
+          title: "Audio Error",
+          description: "Your browser doesn't support advanced audio features.",
+          variant: "destructive"
+        });
+      }
     }
     
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
+      // Clean up audio resources
+      if (audioSourceRef.current) {
+        try {
+          audioSourceRef.current.stop();
+          audioSourceRef.current.disconnect();
+        } catch (e) {
+          console.log("Error cleaning up audio source:", e);
+        }
+        audioSourceRef.current = null;
+      }
+      
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        try {
+          audioContextRef.current.close();
+        } catch (e) {
+          console.log("Error closing audio context:", e);
+        }
       }
     };
-  }, [onTherapistSpeaking, onExpressionChange, isListening, isProcessing]);
+  }, []);
 
   // Initial setup of speech recognition
   useEffect(() => {
@@ -183,6 +194,73 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     }
   };
 
+  // Play audio using AudioContext API instead of HTML Audio element
+  const playAudio = async (audioData: ArrayBuffer) => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      
+      // Resume AudioContext if it's suspended (browser autoplay policy)
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+      
+      // Stop any currently playing audio
+      if (audioSourceRef.current) {
+        try {
+          audioSourceRef.current.stop();
+          audioSourceRef.current.disconnect();
+        } catch (e) {
+          // Ignore errors if already stopped
+        }
+      }
+      
+      // Create new audio source
+      const audioBuffer = await audioContextRef.current.decodeAudioData(audioData.slice(0));
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContextRef.current.destination);
+      
+      // Store source reference for cleanup
+      audioSourceRef.current = source;
+      
+      // Handle audio events
+      onTherapistSpeaking(true);
+      onExpressionChange('speaking');
+      
+      source.onended = () => {
+        console.log("Audio playback ended naturally");
+        onTherapistSpeaking(false);
+        onExpressionChange('neutral');
+        audioSourceRef.current = null;
+        
+        // Resume listening after AI finishes speaking
+        if (!isListening && !isProcessing) {
+          startListening();
+        }
+      };
+      
+      // Start playback
+      source.start(0);
+      console.log("Audio playback started successfully");
+      
+      return true;
+    } catch (error) {
+      console.error("Error playing audio with AudioContext:", error);
+      onTherapistSpeaking(false);
+      onExpressionChange('neutral');
+      
+      toast({
+        title: "Audio playback error",
+        description: "Could not play the audio response. Please check your audio settings.",
+        variant: "destructive"
+      });
+      
+      return false;
+    }
+  };
+
   const processUserMessage = async (userInput: string) => {
     if (!userInput.trim()) return;
     
@@ -199,47 +277,37 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       const llmResponse = await generateLLMResponse(userInput);
       console.log("LLM response received:", llmResponse);
       
-      // Update expression based on LLM response
-      if (llmResponse.expression) {
-        onExpressionChange(llmResponse.expression);
+      // Extract emotion from response
+      const expressionMatch = llmResponse.text.match(/\[(.*?)\]$/);
+      let responseText = llmResponse.text;
+      let expression = llmResponse.expression || 'neutral';
+      
+      if (expressionMatch) {
+        expression = expressionMatch[1];
+        responseText = llmResponse.text.replace(/\[(.*?)\]$/, '').trim();
       }
+      
+      // Update expression based on LLM response
+      onExpressionChange(expression);
       
       // Add therapist message to conversation
       const therapistMessage = {
-        text: llmResponse.text,
+        text: responseText,
         sender: 'therapist',
         timestamp: new Date()
       };
       
       // Update parent component with therapist message
-      onUserMessage(therapistMessage.text);
+      onUserMessage(responseText);
       
       // Convert text to speech
       console.log("Converting text to speech...");
-      const audioData = await convertTextToSpeech(llmResponse.text);
+      const audioData = await convertTextToSpeech(responseText);
       
-      if (audioData && audioRef.current) {
+      if (audioData) {
         console.log("Audio data received, playing...");
-        // Create a blob from the audio data
-        const blob = new Blob([audioData], { type: 'audio/mpeg' });
-        const url = URL.createObjectURL(blob);
-        
-        // Play the audio
-        audioRef.current.src = url;
-        await audioRef.current.play().catch(err => {
-          console.error("Error playing audio:", err);
-          toast({
-            title: "Audio playback error",
-            description: "Could not play the audio response. Please check your audio settings.",
-            variant: "destructive"
-          });
-          
-          // Resume listening after error
-          setIsProcessing(false);
-          if (!isListening) {
-            startListening();
-          }
-        });
+        // Play the audio using AudioContext API
+        await playAudio(audioData);
       } else {
         console.error("No audio data received");
         toast({
