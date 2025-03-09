@@ -74,6 +74,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
         recognitionRef.current.onstart = () => {
           setIsListening(true);
           onExpressionChange('listening');
+          console.log("Speech recognition started");
         };
         
         recognitionRef.current.onresult = (event: any) => {
@@ -81,8 +82,10 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
           const result = event.results[current];
           const transcriptText = result[0].transcript;
           setTranscript(transcriptText);
+          console.log("Transcript:", transcriptText);
           
           if (result.isFinal) {
+            console.log("Final transcript:", transcriptText);
             onSpeechEnd();
             onUserMessage(transcriptText);
             setTranscript('');
@@ -92,21 +95,35 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
         
         recognitionRef.current.onerror = (event: any) => {
           console.error('Speech recognition error', event.error);
-          setIsListening(false);
-          onSpeechEnd();
           
-          // Show toast for permission denied
-          if (event.error === 'not-allowed' || event.error === 'permission-denied') {
-            toast({
-              title: "Microphone access denied",
-              description: "Please allow microphone access to use the speech feature.",
-              variant: "destructive"
-            });
+          // Don't stop listening on aborted errors, they happen when restarting
+          if (event.error !== 'aborted') {
+            setIsListening(false);
+            onSpeechEnd();
+            
+            // Show toast for permission denied
+            if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+              toast({
+                title: "Microphone access denied",
+                description: "Please allow microphone access to use the speech feature.",
+                variant: "destructive"
+              });
+            }
           }
         };
         
         recognitionRef.current.onend = () => {
+          console.log("Speech recognition ended");
           setIsListening(false);
+          
+          // Auto restart if not processing - this helps with browser limitations
+          if (!isProcessing) {
+            try {
+              startListening();
+            } catch (error) {
+              console.error("Failed to restart listening:", error);
+            }
+          }
         };
       }
     } else {
@@ -122,20 +139,38 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
         recognitionRef.current.stop();
       }
     };
-  }, [onSpeechEnd, onSpeechStart, onUserMessage, onExpressionChange]);
+  }, [onSpeechEnd, onSpeechStart, onUserMessage, onExpressionChange, isProcessing]);
 
   const startListening = () => {
     try {
-      recognitionRef.current?.start();
-      setIsListening(true);
-      onSpeechStart();
+      if (recognitionRef.current) {
+        recognitionRef.current.start();
+        setIsListening(true);
+        onSpeechStart();
+        console.log("Started listening");
+      } else {
+        console.error("Speech recognition not initialized");
+      }
     } catch (error) {
-      console.error('Speech recognition error:', error);
+      console.error('Error starting speech recognition:', error);
+      // Try to recreate recognition if it fails
+      if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+        const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognitionRef.current = new SpeechRecognitionAPI();
+        setTimeout(() => startListening(), 100);
+      }
     }
   };
 
   const stopListening = () => {
-    recognitionRef.current?.stop();
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+        console.log("Stopped listening");
+      } catch (error) {
+        console.error("Error stopping speech recognition:", error);
+      }
+    }
     setIsListening(false);
     onSpeechEnd();
   };
@@ -149,39 +184,75 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
   };
 
   const processUserMessage = async (userInput: string) => {
+    if (!userInput.trim()) return;
+    
     setIsProcessing(true);
     onExpressionChange('thinking');
+    console.log("Processing user message:", userInput);
     
     // Stop recognition while AI is processing
     stopListening();
     
     try {
       // Get response from LLM
+      console.log("Generating LLM response...");
       const llmResponse = await generateLLMResponse(userInput);
+      console.log("LLM response received:", llmResponse);
       
       // Update expression based on LLM response
       if (llmResponse.expression) {
         onExpressionChange(llmResponse.expression);
       }
       
+      // Add therapist message to conversation
+      const therapistMessage = {
+        text: llmResponse.text,
+        sender: 'therapist',
+        timestamp: new Date()
+      };
+      
+      // Update parent component with therapist message
+      onUserMessage(therapistMessage.text);
+      
       // Convert text to speech
+      console.log("Converting text to speech...");
       const audioData = await convertTextToSpeech(llmResponse.text);
       
       if (audioData && audioRef.current) {
+        console.log("Audio data received, playing...");
         // Create a blob from the audio data
         const blob = new Blob([audioData], { type: 'audio/mpeg' });
         const url = URL.createObjectURL(blob);
         
         // Play the audio
         audioRef.current.src = url;
-        audioRef.current.play();
-      } else {
-        // If text-to-speech fails, resume listening after a delay
-        setTimeout(() => {
-          if (!isListening && !isProcessing) {
+        await audioRef.current.play().catch(err => {
+          console.error("Error playing audio:", err);
+          toast({
+            title: "Audio playback error",
+            description: "Could not play the audio response. Please check your audio settings.",
+            variant: "destructive"
+          });
+          
+          // Resume listening after error
+          setIsProcessing(false);
+          if (!isListening) {
             startListening();
           }
-        }, 1000);
+        });
+      } else {
+        console.error("No audio data received");
+        toast({
+          title: "Text-to-speech error",
+          description: "Failed to convert response to speech.",
+          variant: "destructive"
+        });
+        
+        // Resume listening after error
+        setIsProcessing(false);
+        if (!isListening) {
+          startListening();
+        }
       }
     } catch (error) {
       console.error('Error processing message:', error);
@@ -191,12 +262,11 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
         variant: "destructive"
       });
       
-      // Resume listening after a delay
-      setTimeout(() => {
-        if (!isListening && !isProcessing) {
-          startListening();
-        }
-      }, 1000);
+      // Resume listening after error
+      setIsProcessing(false);
+      if (!isListening) {
+        startListening();
+      }
     } finally {
       setIsProcessing(false);
     }

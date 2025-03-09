@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Avatar from './Avatar';
@@ -25,34 +24,24 @@ const ConversationUI = () => {
         timestamp: new Date()
       };
       setMessages([initialMessage]);
-      speakMessage(initialMessage.text);
     }, 1000);
   }, []);
 
-  const speakMessage = (text: string) => {
-    setIsSpeaking(true);
-    setExpression('speaking');
-    
-    // The actual speaking happens in SpeechProcessor component
-    // This is just for the initial message
-    if (window.speechSynthesis) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        setExpression('neutral');
-      };
-      window.speechSynthesis.speak(utterance);
-    }
-  };
-
   const handleUserMessage = (text: string) => {
+    // Handle different message senders
+    if (typeof text !== 'string') return;
+    
+    // Determine if this is a user or therapist message based on context
+    const isUserMessage = !isSpeaking && !expression.includes('thinking');
+    
     const newMessage: Message = {
       text,
-      sender: 'user',
+      sender: isUserMessage ? 'user' : 'therapist',
       timestamp: new Date()
     };
     
     setMessages(prev => [...prev, newMessage]);
+    console.log(`Added ${isUserMessage ? 'user' : 'therapist'} message:`, text);
   };
 
   const handleSpeechStart = () => {
@@ -65,10 +54,12 @@ const ConversationUI = () => {
 
   const handleTherapistSpeaking = (speaking: boolean) => {
     setIsSpeaking(speaking);
+    console.log("Therapist speaking:", speaking);
   };
 
   const handleExpressionChange = (newExpression: string) => {
     setExpression(newExpression);
+    console.log("Expression changed:", newExpression);
   };
 
   return (

@@ -27,6 +27,8 @@ export const setElevenLabsApiKey = (key: string) => {
 
 export async function generateLLMResponse(userInput: string): Promise<LLMResponse> {
   try {
+    console.log('Generating LLM response with input:', userInput);
+    
     // Using Groq API with Llama 3.3 70B model
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -52,10 +54,14 @@ export async function generateLLMResponse(userInput: string): Promise<LLMRespons
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API error (${response.status}): ${errorText}`);
       throw new Error(`API error: ${response.status}`);
     }
 
     const data = await response.json();
+    console.log('LLM API response:', data);
+    
     let responseText = data.choices[0].message.content;
     
     // Extract expression from response if present
@@ -67,6 +73,7 @@ export async function generateLLMResponse(userInput: string): Promise<LLMRespons
       responseText = responseText.replace(/\[(.*?)\]$/, '').trim();
     }
 
+    console.log('Extracted response:', { text: responseText, expression });
     return {
       text: responseText,
       expression: expression
@@ -87,7 +94,8 @@ export async function generateLLMResponse(userInput: string): Promise<LLMRespons
 
 export async function convertTextToSpeech(text: string): Promise<ArrayBuffer | null> {
   try {
-    const voiceId = "EXAVITQu4vr4xnSDxMaL"; // Aria voice
+    console.log('Converting text to speech:', text);
+    const voiceId = "EXAVITQu4vr4xnSDxMaL"; // Sarah voice
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
 
     const response = await fetch(url, {
@@ -107,10 +115,14 @@ export async function convertTextToSpeech(text: string): Promise<ArrayBuffer | n
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`ElevenLabs API error (${response.status}): ${errorText}`);
       throw new Error(`ElevenLabs API error: ${response.status}`);
     }
 
-    return await response.arrayBuffer();
+    const audioData = await response.arrayBuffer();
+    console.log('Received audio data of size:', audioData.byteLength);
+    return audioData;
   } catch (error) {
     console.error('Error converting text to speech:', error);
     toast({
