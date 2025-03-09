@@ -6,39 +6,36 @@ interface LLMResponse {
   expression?: string;
 }
 
-// This will be replaced with actual API key from user input
-let llamaApiKey = '';
-let elevenLabsApiKey = '';
+// Pre-initialized API keys
+const groqApiKey = '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';
+const elevenLabsApiKey = 'sk_e47c0ef8a36ab64a793f871e54e14ca1c214c1e9eac65a61';
 
+// Getters for API keys (kept for backwards compatibility)
+export const getLlamaApiKey = () => groqApiKey;
+export const getElevenLabsApiKey = () => elevenLabsApiKey;
+
+// These setters are kept for backwards compatibility but won't be used in the frontend
 export const setLlamaApiKey = (key: string) => {
-  llamaApiKey = key;
+  // This is now a no-op as we're using pre-initialized keys
+  console.log('API keys are pre-initialized, this setter has no effect');
 };
 
 export const setElevenLabsApiKey = (key: string) => {
-  elevenLabsApiKey = key;
+  // This is now a no-op as we're using pre-initialized keys
+  console.log('API keys are pre-initialized, this setter has no effect');
 };
-
-export const getLlamaApiKey = () => llamaApiKey;
-export const getElevenLabsApiKey = () => elevenLabsApiKey;
 
 export async function generateLLMResponse(userInput: string): Promise<LLMResponse> {
   try {
-    if (!llamaApiKey) {
-      return {
-        text: "Please provide your LLM API key to enable intelligent responses.",
-        expression: "neutral"
-      };
-    }
-
-    // For now, we'll use a simple call - replace with actual API endpoint when provided
-    const response = await fetch('https://api.perplexity.ai/chat/completions', {
+    // Using Groq API with Llama 3.3 70B model
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${llamaApiKey}`,
+        'Authorization': `Bearer ${groqApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.1-sonar-small-128k-online',
+        model: 'llama-3.3-70b-versatile',
         messages: [
           {
             role: 'system',
@@ -78,7 +75,7 @@ export async function generateLLMResponse(userInput: string): Promise<LLMRespons
     console.error('Error generating LLM response:', error);
     toast({
       title: "Error generating response",
-      description: "There was a problem connecting to the LLM API.",
+      description: "There was a problem connecting to the Groq API.",
       variant: "destructive"
     });
     return {
@@ -90,15 +87,6 @@ export async function generateLLMResponse(userInput: string): Promise<LLMRespons
 
 export async function convertTextToSpeech(text: string): Promise<ArrayBuffer | null> {
   try {
-    if (!elevenLabsApiKey) {
-      toast({
-        title: "ElevenLabs API key missing",
-        description: "Please provide your ElevenLabs API key for text-to-speech capability.",
-        variant: "destructive"
-      });
-      return null;
-    }
-
     const voiceId = "EXAVITQu4vr4xnSDxMaL"; // Aria voice
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
 

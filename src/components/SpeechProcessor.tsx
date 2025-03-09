@@ -1,10 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { toast } from "@/components/ui/use-toast";
-import { generateLLMResponse, convertTextToSpeech, setLlamaApiKey, setElevenLabsApiKey, getLlamaApiKey, getElevenLabsApiKey } from '@/utils/apiService';
+import { generateLLMResponse, convertTextToSpeech } from '@/utils/apiService';
 
 // Add SpeechRecognition to window interface
 declare global {
@@ -32,9 +31,6 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [llamaApiKey, setLlamaApiKeyState] = useState('');
-  const [elevenLabsApiKey, setElevenLabsApiKeyState] = useState('');
-  const [showApiSettings, setShowApiSettings] = useState(true);
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -98,6 +94,15 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
           console.error('Speech recognition error', event.error);
           setIsListening(false);
           onSpeechEnd();
+          
+          // Show toast for permission denied
+          if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+            toast({
+              title: "Microphone access denied",
+              description: "Please allow microphone access to use the speech feature.",
+              variant: "destructive"
+            });
+          }
         };
         
         recognitionRef.current.onend = () => {
@@ -197,89 +202,17 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     }
   };
 
-  const saveApiKeys = () => {
-    setLlamaApiKey(llamaApiKey);
-    setElevenLabsApiKey(elevenLabsApiKey);
-    setShowApiSettings(false);
-    
-    toast({
-      title: "API Keys Saved",
-      description: "Your API keys have been saved. You can now start the conversation.",
-    });
-  };
-
-  const toggleApiSettings = () => {
-    setShowApiSettings(!showApiSettings);
-    // Re-populate fields with current values
-    setLlamaApiKeyState(getLlamaApiKey());
-    setElevenLabsApiKeyState(getElevenLabsApiKey());
-  };
-
   return (
     <div className="w-full flex flex-col items-center">
-      {showApiSettings ? (
-        <Card className="w-full max-w-md mx-auto mt-4 glass-panel">
-          <CardContent className="pt-6">
-            <h3 className="text-lg font-medium mb-4">API Settings</h3>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="llamaApiKey" className="text-sm font-medium">
-                  LLM API Key (Perplexity AI)
-                </label>
-                <Input
-                  id="llamaApiKey"
-                  type="password"
-                  value={llamaApiKey}
-                  onChange={(e) => setLlamaApiKeyState(e.target.value)}
-                  placeholder="Enter your Perplexity AI API key"
-                  className="bg-background/50"
-                />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="elevenLabsApiKey" className="text-sm font-medium">
-                  ElevenLabs API Key
-                </label>
-                <Input
-                  id="elevenLabsApiKey"
-                  type="password"
-                  value={elevenLabsApiKey}
-                  onChange={(e) => setElevenLabsApiKeyState(e.target.value)}
-                  placeholder="Enter your ElevenLabs API key"
-                  className="bg-background/50"
-                />
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter className="flex justify-end space-x-2">
-            <Button
-              onClick={saveApiKeys}
-              disabled={!llamaApiKey || !elevenLabsApiKey}
-              className="bg-therapy-blue/70 hover:bg-therapy-blue"
-            >
-              Save and Continue
-            </Button>
-          </CardFooter>
-        </Card>
-      ) : (
-        <>
-          <button
-            onClick={toggleListening}
-            disabled={isProcessing}
-            className={`mt-6 glass-button px-8 py-3 text-foreground font-medium transform transition-all duration-300 hover:scale-105 ${
-              isListening ? 'bg-therapy-pink/30 ring-2 ring-therapy-pink' : isProcessing ? 'bg-therapy-blue/20 opacity-70' : 'bg-therapy-blue/30'
-            }`}
-          >
-            {isListening ? 'Listening...' : isProcessing ? 'Processing...' : 'Start Conversation'}
-          </button>
-          
-          <button
-            onClick={toggleApiSettings}
-            className="mt-4 text-xs text-white/70 hover:text-white underline"
-          >
-            Configure API Keys
-          </button>
-        </>
-      )}
+      <button
+        onClick={toggleListening}
+        disabled={isProcessing}
+        className={`mt-6 glass-button px-8 py-3 text-foreground font-medium transform transition-all duration-300 hover:scale-105 ${
+          isListening ? 'bg-therapy-pink/30 ring-2 ring-therapy-pink' : isProcessing ? 'bg-therapy-blue/20 opacity-70' : 'bg-therapy-blue/30'
+        }`}
+      >
+        {isListening ? 'Listening...' : isProcessing ? 'Processing...' : 'Start Conversation'}
+      </button>
       
       {transcript && (
         <div className="mt-4 animate-fade-in glass-panel px-6 py-3 max-w-md text-sm text-center">
