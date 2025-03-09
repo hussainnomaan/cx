@@ -1,6 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { toast } from "@/components/ui/use-toast";
+import { generateLLMResponse, convertTextToSpeech, setLlamaApiKey, setElevenLabsApiKey, getLlamaApiKey, getElevenLabsApiKey } from '@/utils/apiService';
 
 // Add SpeechRecognition to window interface
 declare global {
@@ -27,8 +31,40 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
 }) => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [llamaApiKey, setLlamaApiKeyState] = useState('');
+  const [elevenLabsApiKey, setElevenLabsApiKeyState] = useState('');
+  const [showApiSettings, setShowApiSettings] = useState(true);
   const recognitionRef = useRef<any>(null);
-  const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+      
+      audioRef.current.onplay = () => {
+        onTherapistSpeaking(true);
+        onExpressionChange('speaking');
+      };
+      
+      audioRef.current.onended = () => {
+        onTherapistSpeaking(false);
+        onExpressionChange('neutral');
+        
+        // Resume listening after AI finishes speaking
+        if (!isListening && !isProcessing) {
+          startListening();
+        }
+      };
+    }
+    
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, [onTherapistSpeaking, onExpressionChange, isListening, isProcessing]);
 
   // Initial setup of speech recognition
   useEffect(() => {
@@ -54,10 +90,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
             onSpeechEnd();
             onUserMessage(transcriptText);
             setTranscript('');
-            onExpressionChange('thinking');
-            
-            // Simulate AI processing and response
-            simulateAIResponse(transcriptText);
+            processUserMessage(transcriptText);
           }
         };
         
@@ -86,103 +119,167 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     };
   }, [onSpeechEnd, onSpeechStart, onUserMessage, onExpressionChange]);
 
-  // Set up speech synthesis
-  useEffect(() => {
-    synthRef.current = new SpeechSynthesisUtterance();
-    
-    synthRef.current.onstart = () => {
-      onTherapistSpeaking(true);
-      onExpressionChange('speaking');
-    };
-    
-    synthRef.current.onend = () => {
-      onTherapistSpeaking(false);
-      onExpressionChange('neutral');
-      
-      // Resume listening after AI finishes speaking
-      if (recognitionRef.current) {
-        recognitionRef.current.start();
-      }
-    };
-    
-    return () => {
-      if (synthRef.current) {
-        window.speechSynthesis.cancel();
-      }
-    };
-  }, [onTherapistSpeaking, onExpressionChange]);
-
-  const toggleListening = () => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      onSpeechEnd();
-    } else {
-      try {
-        recognitionRef.current?.start();
-        setIsListening(true);
-        onSpeechStart();
-      } catch (error) {
-        console.error('Speech recognition error:', error);
-      }
+  const startListening = () => {
+    try {
+      recognitionRef.current?.start();
+      setIsListening(true);
+      onSpeechStart();
+    } catch (error) {
+      console.error('Speech recognition error:', error);
     }
   };
 
-  // This function would be replaced with actual API calls to AI services
-  const simulateAIResponse = (userInput: string) => {
-    // Stop recognition while AI is "thinking"
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+    setIsListening(false);
+    onSpeechEnd();
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
     }
+  };
+
+  const processUserMessage = async (userInput: string) => {
+    setIsProcessing(true);
+    onExpressionChange('thinking');
     
-    setTimeout(() => {
-      let response = "I understand how you feel. Could you tell me more about that?";
+    // Stop recognition while AI is processing
+    stopListening();
+    
+    try {
+      // Get response from LLM
+      const llmResponse = await generateLLMResponse(userInput);
       
-      // Super simple response logic - would be replaced with actual AI
-      if (userInput.toLowerCase().includes('hello') || userInput.toLowerCase().includes('hi')) {
-        response = "Hello there! How are you feeling today?";
-        onExpressionChange('happy');
-      } else if (userInput.toLowerCase().includes('sad') || userInput.toLowerCase().includes('depress')) {
-        response = "I'm sorry to hear you're feeling that way. Remember that it's okay to feel this way sometimes. Would you like to explore what might be contributing to these feelings?";
-        onExpressionChange('empathetic');
-      } else if (userInput.toLowerCase().includes('happy') || userInput.toLowerCase().includes('good')) {
-        response = "I'm glad to hear you're doing well! What's contributing to your positive mood today?";
-        onExpressionChange('happy');
-      } else if (userInput.toLowerCase().includes('anxious') || userInput.toLowerCase().includes('worry')) {
-        response = "When you're feeling anxious, it can be helpful to focus on your breathing. Would you like to try a brief breathing exercise together?";
-        onExpressionChange('empathetic');
+      // Update expression based on LLM response
+      if (llmResponse.expression) {
+        onExpressionChange(llmResponse.expression);
       }
       
-      if (synthRef.current) {
-        synthRef.current.text = response;
-        synthRef.current.rate = 1.0;
-        synthRef.current.pitch = 1.0;
+      // Convert text to speech
+      const audioData = await convertTextToSpeech(llmResponse.text);
+      
+      if (audioData && audioRef.current) {
+        // Create a blob from the audio data
+        const blob = new Blob([audioData], { type: 'audio/mpeg' });
+        const url = URL.createObjectURL(blob);
         
-        // Use a more pleasant voice if available
-        const voices = window.speechSynthesis.getVoices();
-        const preferredVoice = voices.find(voice => 
-          voice.name.includes('Female') || voice.name.includes('Samantha')
-        );
-        
-        if (preferredVoice) {
-          synthRef.current.voice = preferredVoice;
+        // Play the audio
+        audioRef.current.src = url;
+        audioRef.current.play();
+      } else {
+        // If text-to-speech fails, resume listening after a delay
+        setTimeout(() => {
+          if (!isListening && !isProcessing) {
+            startListening();
+          }
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Error processing message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to process your message. Please try again.",
+        variant: "destructive"
+      });
+      
+      // Resume listening after a delay
+      setTimeout(() => {
+        if (!isListening && !isProcessing) {
+          startListening();
         }
-        
-        window.speechSynthesis.speak(synthRef.current);
-      }
-    }, 1500); // Simulate thinking time
+      }, 1000);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const saveApiKeys = () => {
+    setLlamaApiKey(llamaApiKey);
+    setElevenLabsApiKey(elevenLabsApiKey);
+    setShowApiSettings(false);
+    
+    toast({
+      title: "API Keys Saved",
+      description: "Your API keys have been saved. You can now start the conversation.",
+    });
+  };
+
+  const toggleApiSettings = () => {
+    setShowApiSettings(!showApiSettings);
+    // Re-populate fields with current values
+    setLlamaApiKeyState(getLlamaApiKey());
+    setElevenLabsApiKeyState(getElevenLabsApiKey());
   };
 
   return (
     <div className="w-full flex flex-col items-center">
-      <button
-        onClick={toggleListening}
-        className={`mt-6 glass-button px-8 py-3 text-foreground font-medium transform transition-all duration-300 hover:scale-105 ${
-          isListening ? 'bg-therapy-pink/30 ring-2 ring-therapy-pink' : 'bg-therapy-blue/30'
-        }`}
-      >
-        {isListening ? 'Listening...' : 'Start Conversation'}
-      </button>
+      {showApiSettings ? (
+        <Card className="w-full max-w-md mx-auto mt-4 glass-panel">
+          <CardContent className="pt-6">
+            <h3 className="text-lg font-medium mb-4">API Settings</h3>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="llamaApiKey" className="text-sm font-medium">
+                  LLM API Key (Perplexity AI)
+                </label>
+                <Input
+                  id="llamaApiKey"
+                  type="password"
+                  value={llamaApiKey}
+                  onChange={(e) => setLlamaApiKeyState(e.target.value)}
+                  placeholder="Enter your Perplexity AI API key"
+                  className="bg-background/50"
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="elevenLabsApiKey" className="text-sm font-medium">
+                  ElevenLabs API Key
+                </label>
+                <Input
+                  id="elevenLabsApiKey"
+                  type="password"
+                  value={elevenLabsApiKey}
+                  onChange={(e) => setElevenLabsApiKeyState(e.target.value)}
+                  placeholder="Enter your ElevenLabs API key"
+                  className="bg-background/50"
+                />
+              </div>
+            </div>
+          </CardContent>
+          <CardFooter className="flex justify-end space-x-2">
+            <Button
+              onClick={saveApiKeys}
+              disabled={!llamaApiKey || !elevenLabsApiKey}
+              className="bg-therapy-blue/70 hover:bg-therapy-blue"
+            >
+              Save and Continue
+            </Button>
+          </CardFooter>
+        </Card>
+      ) : (
+        <>
+          <button
+            onClick={toggleListening}
+            disabled={isProcessing}
+            className={`mt-6 glass-button px-8 py-3 text-foreground font-medium transform transition-all duration-300 hover:scale-105 ${
+              isListening ? 'bg-therapy-pink/30 ring-2 ring-therapy-pink' : isProcessing ? 'bg-therapy-blue/20 opacity-70' : 'bg-therapy-blue/30'
+            }`}
+          >
+            {isListening ? 'Listening...' : isProcessing ? 'Processing...' : 'Start Conversation'}
+          </button>
+          
+          <button
+            onClick={toggleApiSettings}
+            className="mt-4 text-xs text-white/70 hover:text-white underline"
+          >
+            Configure API Keys
+          </button>
+        </>
+      )}
       
       {transcript && (
         <div className="mt-4 animate-fade-in glass-panel px-6 py-3 max-w-md text-sm text-center">
