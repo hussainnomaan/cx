@@ -37,8 +37,8 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
+  // Initialize AudioContext
   useEffect(() => {
-    // Initialize AudioContext
     if (!audioContextRef.current) {
       try {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -74,125 +74,124 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     };
   }, []);
 
-  // Initial setup of speech recognition
+  // Setup speech recognition
   useEffect(() => {
-    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+    // Initialize speech recognition
+    if (!recognitionRef.current && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
       const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SpeechRecognitionAPI) {
-        recognitionRef.current = new SpeechRecognitionAPI();
-        recognitionRef.current.continuous = true;
-        recognitionRef.current.interimResults = true;
-        
-        recognitionRef.current.onstart = () => {
-          setIsListening(true);
-          onExpressionChange('listening');
-          console.log("Speech recognition started");
-        };
-        
-        recognitionRef.current.onresult = (event: any) => {
-          const current = event.resultIndex;
-          const result = event.results[current];
-          const transcriptText = result[0].transcript;
-          setTranscript(transcriptText);
-          console.log("Transcript:", transcriptText);
-          
-          if (result.isFinal) {
-            console.log("Final transcript:", transcriptText);
-            onSpeechEnd();
-            onUserMessage(transcriptText);
-            setTranscript('');
-            processUserMessage(transcriptText);
-          }
-        };
-        
-        recognitionRef.current.onerror = (event: any) => {
-          console.error('Speech recognition error', event.error);
-          
-          // Don't stop listening on aborted errors, they happen when restarting
-          if (event.error !== 'aborted') {
-            setIsListening(false);
-            onSpeechEnd();
-            
-            // Show toast for permission denied
-            if (event.error === 'not-allowed' || event.error === 'permission-denied') {
-              toast({
-                title: "Microphone access denied",
-                description: "Please allow microphone access to use the speech feature.",
-                variant: "destructive"
-              });
-            } else {
-              // If there's an error that's not just aborting for restart, 
-              // try to restart listening if the conversation is active
-              if (conversationStarted && !isProcessing) {
-                setTimeout(() => {
-                  startListening();
-                }, 1000);
-              }
-            }
-          }
-        };
-        
-        recognitionRef.current.onend = () => {
-          console.log("Speech recognition ended");
-          setIsListening(false);
-          
-          // Auto restart if not processing and conversation has started
-          if (conversationStarted && !isProcessing) {
-            try {
-              // Add a small delay to prevent rapid restart loops
-              setTimeout(() => {
-                if (recognitionRef.current && conversationStarted && !isProcessing) {
-                  startListening();
-                }
-              }, 300);
-            } catch (error) {
-              console.error("Failed to restart listening:", error);
-              // If failed, try again with a longer delay
-              setTimeout(() => {
-                if (conversationStarted && !isProcessing) {
-                  startListening();
-                }
-              }, 1000);
-            }
-          }
-        };
-      }
-    } else {
-      toast({
-        title: "Speech Recognition Not Supported",
-        description: "Your browser doesn't support speech recognition.",
-        variant: "destructive"
-      });
+      recognitionRef.current = new SpeechRecognitionAPI();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      
+      // Set up speech recognition handlers
+      setupRecognitionHandlers();
+    }
+    
+    // Start/stop listening based on conversationStarted state
+    if (conversationStarted && !isListening && !isProcessing) {
+      startListening();
+    } else if (!conversationStarted && isListening) {
+      stopListening();
     }
     
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try {
+          recognitionRef.current.stop();
+        } catch (error) {
+          console.error("Error stopping speech recognition on cleanup:", error);
+        }
       }
     };
-  }, [onSpeechEnd, onSpeechStart, onUserMessage, onExpressionChange, isProcessing, conversationStarted]);
+  }, [conversationStarted, isListening, isProcessing]);
+
+  const setupRecognitionHandlers = () => {
+    if (!recognitionRef.current) return;
+    
+    recognitionRef.current.onstart = () => {
+      console.log("Speech recognition started");
+      setIsListening(true);
+      onExpressionChange('listening');
+    };
+    
+    recognitionRef.current.onresult = (event: any) => {
+      const current = event.resultIndex;
+      const result = event.results[current];
+      const transcriptText = result[0].transcript;
+      setTranscript(transcriptText);
+      
+      if (result.isFinal) {
+        console.log("Final transcript:", transcriptText);
+        onSpeechEnd();
+        onUserMessage(transcriptText);
+        setTranscript('');
+        processUserMessage(transcriptText);
+      }
+    };
+    
+    recognitionRef.current.onerror = (event: any) => {
+      console.error('Speech recognition error', event.error);
+      
+      if (event.error === 'aborted') {
+        // This happens during normal operation when restarting recognition
+        return;
+      }
+      
+      setIsListening(false);
+      onSpeechEnd();
+      
+      if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+        toast({
+          title: "Microphone access denied",
+          description: "Please allow microphone access to use the speech feature.",
+          variant: "destructive"
+        });
+        setConversationStarted(false);
+      } else if (conversationStarted && !isProcessing) {
+        // Auto-restart on non-fatal errors
+        console.log("Auto-restarting recognition after error");
+        setTimeout(() => startListening(), 1000);
+      }
+    };
+    
+    recognitionRef.current.onend = () => {
+      console.log("Speech recognition ended");
+      setIsListening(false);
+      
+      // Auto-restart if conversation is active and we're not processing
+      if (conversationStarted && !isProcessing) {
+        console.log("Auto-restarting recognition after end");
+        setTimeout(() => {
+          if (conversationStarted && !isProcessing) {
+            startListening();
+          }
+        }, 300);
+      }
+    };
+  };
 
   const startListening = () => {
-    if (recognitionRef.current && !isListening) {
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-        onSpeechStart();
-        console.log("Started listening");
-      } catch (error) {
-        console.error('Error starting speech recognition:', error);
-        
-        // Try to recreate recognition if it fails
+    if (!recognitionRef.current || isListening || isProcessing) return;
+    
+    try {
+      recognitionRef.current.start();
+      setIsListening(true);
+      onSpeechStart();
+      console.log("Started listening");
+    } catch (error) {
+      console.error('Error starting speech recognition:', error);
+      
+      // If recognition is in an invalid state, recreate it
+      if (error instanceof DOMException && error.name === 'InvalidStateError') {
+        recognitionRef.current = null;
         if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
           const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
           recognitionRef.current = new SpeechRecognitionAPI();
           recognitionRef.current.continuous = true;
           recognitionRef.current.interimResults = true;
-          
-          // Re-add event handlers
           setupRecognitionHandlers();
           
-          // Try again with a delay
+          // Try again
           setTimeout(() => {
             if (conversationStarted && !isProcessing) {
               startListening();
@@ -203,75 +202,53 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     }
   };
 
-  const setupRecognitionHandlers = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.onstart = () => {
-        setIsListening(true);
-        onExpressionChange('listening');
-        console.log("Speech recognition started");
-      };
-      
-      recognitionRef.current.onresult = (event: any) => {
-        const current = event.resultIndex;
-        const result = event.results[current];
-        const transcriptText = result[0].transcript;
-        setTranscript(transcriptText);
-        
-        if (result.isFinal) {
-          console.log("Final transcript:", transcriptText);
-          onSpeechEnd();
-          onUserMessage(transcriptText);
-          setTranscript('');
-          processUserMessage(transcriptText);
-        }
-      };
-      
-      recognitionRef.current.onerror = (event: any) => {
-        console.error('Speech recognition error', event.error);
-        if (event.error !== 'aborted') {
-          setIsListening(false);
-          onSpeechEnd();
-        }
-      };
-      
-      recognitionRef.current.onend = () => {
-        console.log("Speech recognition ended");
-        setIsListening(false);
-        
-        if (conversationStarted && !isProcessing) {
-          setTimeout(() => startListening(), 300);
-        }
-      };
-    }
-  };
-
   const stopListening = () => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-        console.log("Stopped listening");
-      } catch (error) {
-        console.error("Error stopping speech recognition:", error);
-      }
+    if (!recognitionRef.current || !isListening) return;
+    
+    try {
+      recognitionRef.current.stop();
+      console.log("Stopped listening");
+    } catch (error) {
+      console.error("Error stopping speech recognition:", error);
     }
+    
     setIsListening(false);
     onSpeechEnd();
   };
 
-  const toggleListening = () => {
-    if (!conversationStarted) {
-      setConversationStarted(true);
-      startListening();
-    } else if (isListening) {
-      stopListening();
-      setConversationStarted(false);
+  const toggleConversation = () => {
+    const newConversationState = !conversationStarted;
+    setConversationStarted(newConversationState);
+    
+    if (newConversationState) {
+      // Starting conversation
+      if (!isListening && !isProcessing) {
+        startListening();
+      }
     } else {
-      startListening();
-      setConversationStarted(true);
+      // Ending conversation
+      if (isListening) {
+        stopListening();
+      }
+      
+      // Also stop AI from speaking if it is
+      if (audioSourceRef.current) {
+        try {
+          audioSourceRef.current.stop();
+          audioSourceRef.current.disconnect();
+          audioSourceRef.current = null;
+          onTherapistSpeaking(false);
+          onExpressionChange('neutral');
+        } catch (e) {
+          console.log("Error stopping audio:", e);
+        }
+      }
+      
+      setIsProcessing(false);
     }
   };
 
-  // Play audio using AudioContext API instead of HTML Audio element
+  // Play audio using AudioContext API
   const playAudio = async (audioData: ArrayBuffer) => {
     try {
       if (!audioContextRef.current) {
@@ -314,12 +291,14 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
         
         // Resume listening after AI finishes speaking
         setIsProcessing(false);
+        
+        // Only restart listening if conversation is still active
         if (conversationStarted) {
           setTimeout(() => {
-            if (!isListening && conversationStarted) {
+            if (conversationStarted && !isListening && !isProcessing) {
               startListening();
             }
-          }, 500);
+          }, 300);
         }
       };
       
@@ -339,14 +318,14 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
         variant: "destructive"
       });
       
-      // Even if audio fails, we should try to continue the conversation
+      // Continue the conversation even if audio fails
       setIsProcessing(false);
       if (conversationStarted) {
         setTimeout(() => {
-          if (!isListening && conversationStarted) {
+          if (conversationStarted && !isListening && !isProcessing) {
             startListening();
           }
-        }, 500);
+        }, 300);
       }
       
       return false;
@@ -401,7 +380,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
           variant: "destructive"
         });
         
-        // Resume listening after error
+        // Resume listening after error if conversation is still active
         setIsProcessing(false);
         if (conversationStarted && !isListening) {
           startListening();
@@ -415,7 +394,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
         variant: "destructive"
       });
       
-      // Resume listening after error
+      // Resume listening after error if conversation is still active
       setIsProcessing(false);
       if (conversationStarted && !isListening) {
         startListening();
@@ -426,7 +405,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
   return (
     <div className="w-full flex flex-col items-center">
       <button
-        onClick={toggleListening}
+        onClick={toggleConversation}
         disabled={isProcessing}
         className={`mt-6 glass-button px-8 py-3 text-foreground font-medium transform transition-all duration-300 hover:scale-105 ${
           isListening ? 'bg-therapy-pink/30 ring-2 ring-therapy-pink' : 
