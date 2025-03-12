@@ -1,11 +1,12 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import ConversationUI from '@/components/ConversationUI';
 import { motion } from 'framer-motion';
 import { useToast } from '@/components/ui/use-toast';
 
 const Index = () => {
   const { toast } = useToast();
+  const [microphonePermission, setMicrophonePermission] = useState<'granted' | 'denied' | 'prompt' | 'checking'>('checking');
 
   useEffect(() => {
     // Check browser support for speech recognition
@@ -17,9 +18,45 @@ const Index = () => {
       });
     }
     
-    // Request microphone permission
+    // Check if microphone permissions are already granted
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'microphone' as PermissionName })
+        .then(permissionStatus => {
+          setMicrophonePermission(permissionStatus.state as 'granted' | 'denied' | 'prompt');
+          
+          // Listen for permission changes
+          permissionStatus.onchange = () => {
+            setMicrophonePermission(permissionStatus.state as 'granted' | 'denied' | 'prompt');
+            
+            if (permissionStatus.state === 'granted') {
+              toast({
+                title: "Microphone access granted",
+                description: "You can now start the conversation with your AI therapist.",
+              });
+            } else if (permissionStatus.state === 'denied') {
+              toast({
+                title: "Microphone access denied",
+                description: "Please allow microphone access to use the speech features.",
+                variant: "destructive",
+              });
+            }
+          };
+        })
+        .catch(error => {
+          console.error('Error checking microphone permission:', error);
+          // Fallback to getUserMedia
+          requestMicrophoneAccess();
+        });
+    } else {
+      // Fallback for browsers that don't support permissions API
+      requestMicrophoneAccess();
+    }
+  }, [toast]);
+  
+  const requestMicrophoneAccess = () => {
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then(() => {
+        setMicrophonePermission('granted');
         toast({
           title: "Microphone access granted",
           description: "You can now start the conversation with your AI therapist.",
@@ -27,13 +64,14 @@ const Index = () => {
       })
       .catch((err) => {
         console.error('Microphone access error:', err);
+        setMicrophonePermission('denied');
         toast({
           title: "Microphone access denied",
           description: "Please allow microphone access to use the speech features.",
           variant: "destructive",
         });
       });
-  }, [toast]);
+  };
 
   return (
     <div className="min-h-screen futuristic-gradient-bg overflow-hidden">
