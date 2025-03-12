@@ -27,7 +27,7 @@ const Avatar: React.FC<AvatarProps> = ({ expressionState = "neutral", isSpeaking
   return (
     <motion.div
       ref={avatarRef}
-      className="relative w-64 h-64 rounded-full overflow-hidden glass-panel flex items-center justify-center"
+      className="relative w-64 h-64 rounded-full overflow-hidden glass-panel flex items-center justify-center border-2 border-therapy-cyan neon-shadow"
       initial={{ scale: 0.9, opacity: 0 }}
       animate={{ 
         scale: 1, 
@@ -58,7 +58,7 @@ const Avatar: React.FC<AvatarProps> = ({ expressionState = "neutral", isSpeaking
       <div className="relative w-full h-full flex items-center justify-center">
         <div className="absolute inset-0 w-full h-full rounded-full overflow-hidden">
           {/* Dynamic gradient background */}
-          <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 animate-gradient-x">
+          <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-therapy-cyan via-therapy-black to-therapy-yellow animate-gradient-x">
             {/* Inner dynamic effects */}
             <div className="absolute inset-0 w-full h-full opacity-70 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-white/20 to-transparent animate-pulse"></div>
           </div>
@@ -79,7 +79,7 @@ const Avatar: React.FC<AvatarProps> = ({ expressionState = "neutral", isSpeaking
             {/* Eyes representation */}
             <div className="flex space-x-12 mb-8">
               <motion.div 
-                className="w-8 h-3 rounded-full bg-white/80 backdrop-blur-md"
+                className="w-8 h-3 rounded-full bg-therapy-yellow backdrop-blur-md"
                 animate={{ 
                   height: currentExpression === "thinking" ? [3, 5, 3] : 3,
                   width: currentExpression === "happy" ? 10 : 8
@@ -90,7 +90,7 @@ const Avatar: React.FC<AvatarProps> = ({ expressionState = "neutral", isSpeaking
                 }}
               />
               <motion.div 
-                className="w-8 h-3 rounded-full bg-white/80 backdrop-blur-md"
+                className="w-8 h-3 rounded-full bg-therapy-yellow backdrop-blur-md"
                 animate={{ 
                   height: currentExpression === "thinking" ? [3, 5, 3] : 3,
                   width: currentExpression === "happy" ? 10 : 8
@@ -104,7 +104,7 @@ const Avatar: React.FC<AvatarProps> = ({ expressionState = "neutral", isSpeaking
             
             {/* Mouth/speaker visualization */}
             <motion.div 
-              className="w-24 h-4 rounded-full bg-white/70 backdrop-blur-md overflow-hidden"
+              className="w-24 h-4 rounded-full bg-therapy-cyan backdrop-blur-md overflow-hidden"
               animate={{ 
                 width: currentExpression === "happy" ? 32 : 24,
                 height: isSpeaking ? [4, 6, 3, 7, 4] : 4
@@ -116,7 +116,7 @@ const Avatar: React.FC<AvatarProps> = ({ expressionState = "neutral", isSpeaking
             >
               {isSpeaking && (
                 <motion.div 
-                  className="w-full h-full bg-gradient-to-r from-indigo-600 to-purple-600"
+                  className="w-full h-full bg-gradient-to-r from-therapy-cyan to-therapy-yellow"
                   animate={{
                     x: ["-25%", "0%", "25%", "0%", "-25%"]
                   }}
@@ -134,7 +134,7 @@ const Avatar: React.FC<AvatarProps> = ({ expressionState = "neutral", isSpeaking
             {Array.from({ length: 10 }).map((_, i) => (
               <motion.div
                 key={i}
-                className="absolute w-1 h-1 rounded-full bg-white/70"
+                className="absolute w-1 h-1 rounded-full bg-therapy-cyan/70"
                 initial={{ 
                   x: Math.random() * 100 - 50, 
                   y: Math.random() * 100 - 50,
@@ -158,10 +158,10 @@ const Avatar: React.FC<AvatarProps> = ({ expressionState = "neutral", isSpeaking
         {/* Call-to-action button overlay */}
         {currentExpression === "neutral" && (
           <div className="absolute bottom-4 w-full flex justify-center">
-            <div className="bg-white/80 backdrop-blur-sm text-black px-4 py-2 rounded-full flex items-center gap-2 text-sm font-medium">
-              <span className="w-4 h-4 bg-indigo-600 rounded-full flex items-center justify-center">
+            <div className="bg-therapy-black/80 backdrop-blur-sm text-therapy-yellow px-4 py-2 rounded-full flex items-center gap-2 text-sm font-medium border border-therapy-cyan/40">
+              <span className="w-4 h-4 bg-therapy-cyan rounded-full flex items-center justify-center">
                 <motion.span 
-                  className="block w-2 h-2 bg-white"
+                  className="block w-2 h-2 bg-therapy-black"
                   animate={{ 
                     height: [2, 6, 2],
                   }}

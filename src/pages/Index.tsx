@@ -46,7 +46,7 @@ const Index = () => {
         <ConversationUI />
         
         {/* Footer */}
-        <footer className="w-full text-center py-4 text-xs text-white/80">
+        <footer className="w-full text-center py-4 text-xs text-therapy-cyan/80">
           <p>AI Therapist is for demonstration purposes only and not a substitute for professional help.</p>
           <p className="mt-1">
             If you're experiencing a mental health crisis, please contact a mental health professional.

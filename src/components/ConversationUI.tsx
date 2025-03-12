@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Avatar from './Avatar';
@@ -66,8 +67,8 @@ const ConversationUI = () => {
     <div className="flex flex-col items-center justify-center w-full h-full">
       {/* Background blobs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="blob bg-therapy-blue/40"></div>
-        <div className="blob bg-therapy-pink/40"></div>
+        <div className="blob bg-therapy-cyan/40"></div>
+        <div className="blob bg-therapy-yellow/40"></div>
       </div>
 
       <div className="relative z-10 w-full max-w-4xl mx-auto px-4">
@@ -119,12 +120,12 @@ const ConversationUI = () => {
                     <div 
                       className={`rounded-2xl px-4 py-2 max-w-xs ${
                         msg.sender === 'user' 
-                          ? 'bg-therapy-blue/30 mr-2' 
-                          : 'bg-therapy-pink/30 ml-2'
+                          ? 'bg-therapy-cyan/20 border border-therapy-cyan/40 mr-2' 
+                          : 'bg-therapy-yellow/20 border border-therapy-yellow/40 ml-2'
                       }`}
                     >
                       <p className="text-sm">{msg.text}</p>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-400 mt-1">
                         {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>

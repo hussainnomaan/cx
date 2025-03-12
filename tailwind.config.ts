@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss"
 
 const config: Config = {
@@ -52,8 +53,9 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        'therapy-blue': '#6366f1',
-        'therapy-pink': '#ec4899',
+        'therapy-cyan': '#0de5ff',
+        'therapy-yellow': '#ffde03',
+        'therapy-black': '#121212',
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -97,12 +99,27 @@ const config: Config = {
             transform: 'translate(0px, 0px) rotate(90deg)',
           },
         },
+        glow: {
+          '0%': { 
+            boxShadow: '0 0 5px #0de5ff, 0 0 10px #0de5ff, 0 0 15px #0de5ff',
+            opacity: 1 
+          },
+          '50%': { 
+            boxShadow: '0 0 20px #0de5ff, 0 0 30px #0de5ff, 0 0 40px #0de5ff',
+            opacity: 0.8 
+          },
+          '100%': { 
+            boxShadow: '0 0 5px #0de5ff, 0 0 10px #0de5ff, 0 0 15px #0de5ff',
+            opacity: 1 
+          },
+        }
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         ripple: 'ripple 1.5s linear infinite',
         blob: 'blob 7s infinite linear',
+        glow: 'glow 2s ease-in-out infinite',
       },
     },
   },
