@@ -35,55 +35,87 @@ const Index = () => {
 
   const checkMicrophonePermission = async () => {
     try {
-      // First try to get existing permission state
-      const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      // First check if we can get microphone access directly
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      setMicrophonePermission(permissionStatus.state as 'granted' | 'denied' | 'prompt');
+      // If we get here, permission is granted
+      setMicrophonePermission('granted');
+      // Clean up the stream we just created
+      stream.getTracks().forEach(track => track.stop());
       
-      // Show dialog if permission is denied
-      if (permissionStatus.state === 'denied') {
-        setShowPermissionDialog(true);
-      }
+      toast({
+        title: "Microphone access granted",
+        description: "You can now start the conversation with your AI therapist.",
+      });
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
       
-      // Listen for permission changes
-      permissionStatus.onchange = () => {
+      // Try to get permission status from permissions API as fallback
+      try {
+        const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
         setMicrophonePermission(permissionStatus.state as 'granted' | 'denied' | 'prompt');
         
-        if (permissionStatus.state === 'granted') {
-          setShowPermissionDialog(false);
-          toast({
-            title: "Microphone access granted",
-            description: "You can now start the conversation with your AI therapist.",
-          });
-        } else if (permissionStatus.state === 'denied') {
+        if (permissionStatus.state === 'denied') {
           setShowPermissionDialog(true);
           toast({
             title: "Microphone access denied",
             description: "Please allow microphone access to use the speech features.",
             variant: "destructive",
           });
+        } else if (permissionStatus.state === 'prompt') {
+          // We'll prompt again when user starts conversation
+          toast({
+            title: "Microphone permission needed",
+            description: "You'll need to allow microphone access when prompted.",
+          });
         }
-      };
-    } catch (error) {
-      console.error('Error checking microphone permission:', error);
-      // Fallback to getUserMedia
-      requestMicrophoneAccess();
+        
+        // Listen for permission changes
+        permissionStatus.onchange = () => {
+          setMicrophonePermission(permissionStatus.state as 'granted' | 'denied' | 'prompt');
+          
+          if (permissionStatus.state === 'granted') {
+            setShowPermissionDialog(false);
+            toast({
+              title: "Microphone access granted",
+              description: "You can now start the conversation with your AI therapist.",
+            });
+          } else if (permissionStatus.state === 'denied') {
+            setShowPermissionDialog(true);
+            toast({
+              title: "Microphone access denied",
+              description: "Please allow microphone access to use the speech features.",
+              variant: "destructive",
+            });
+          }
+        };
+      } catch (permError) {
+        console.error('Error checking microphone permission:', permError);
+        // If permissions API fails, assume we need permission
+        setMicrophonePermission('denied');
+        setShowPermissionDialog(true);
+      }
     }
   };
   
   const requestMicrophoneAccess = async () => {
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // If we got here, permission was granted
+      stream.getTracks().forEach(track => track.stop()); // Clean up
+      
       setMicrophonePermission('granted');
       setShowPermissionDialog(false);
       toast({
         title: "Microphone access granted",
         description: "You can now start the conversation with your AI therapist.",
       });
+      
+      // Force a reload to make sure all components reinitialize correctly
+      window.location.reload();
     } catch (err) {
       console.error('Microphone access error:', err);
       setMicrophonePermission('denied');
-      setShowPermissionDialog(true);
       toast({
         title: "Microphone access denied",
         description: "Please allow microphone access to use the speech features.",
@@ -111,7 +143,7 @@ const Index = () => {
                 <ul className="list-disc list-inside mt-2 space-y-1">
                   <li>Click the microphone/camera icon in your browser's address bar</li>
                   <li>Select "Allow" for microphone access</li>
-                  <li>Refresh the page after allowing access</li>
+                  <li>After allowing access, click "Try Again" button below</li>
                 </ul>
               </AlertDialogDescription>
             </AlertDialogHeader>

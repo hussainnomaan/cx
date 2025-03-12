@@ -32,6 +32,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
   const [transcript, setTranscript] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [conversationStarted, setConversationStarted] = useState(false);
+  const [permissionGranted, setPermissionGranted] = useState(false);
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -53,6 +54,9 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
         });
       }
     }
+    
+    // Check for microphone permission immediately
+    checkMicrophonePermission();
     
     return () => {
       // Clean up audio resources
@@ -81,6 +85,30 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     };
   }, []);
 
+  // Check microphone permission
+  const checkMicrophonePermission = async () => {
+    try {
+      // Directly try to access microphone to trigger permission prompt
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // If we got here, permission was granted
+      setPermissionGranted(true);
+      // Clean up the stream
+      stream.getTracks().forEach(track => track.stop());
+      
+      // Now safe to set up recognition
+      setupRecognition();
+    } catch (error) {
+      console.error("Error getting microphone access:", error);
+      setPermissionGranted(false);
+      toast({
+        title: "Microphone Access Required",
+        description: "Please allow microphone access to use the voice features.",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Clean up recognition on unmount
   useEffect(() => {
     return () => {
@@ -97,8 +125,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
 
   // Setup speech recognition and handle conversation state
   useEffect(() => {
-    // Initialize speech recognition if needed
-    setupRecognition();
+    if (!permissionGranted) return;
     
     // Start/stop listening based on conversationStarted state
     if (conversationStarted && !isListening && !isProcessing && !isRecognitionActiveRef.current) {
@@ -106,7 +133,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     } else if (!conversationStarted && (isListening || isRecognitionActiveRef.current)) {
       stopListening(true);
     }
-  }, [conversationStarted, isListening, isProcessing]);
+  }, [conversationStarted, isListening, isProcessing, permissionGranted]);
 
   const setupRecognition = () => {
     // Initialize speech recognition if it doesn't exist yet
@@ -159,6 +186,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       onSpeechEnd();
       
       if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+        setPermissionGranted(false);
         toast({
           title: "Microphone access denied",
           description: "Please allow microphone access to use the speech feature.",
@@ -223,6 +251,12 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
   const startListening = () => {
     if (!recognitionRef.current || isRecognitionActiveRef.current || isProcessing) return;
     
+    // Double-check microphone permission before starting
+    if (!permissionGranted) {
+      checkMicrophonePermission();
+      return;
+    }
+    
     try {
       recognitionRef.current.start();
       console.info("Started listening");
@@ -263,12 +297,26 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     onSpeechEnd();
   };
 
-  const toggleConversation = () => {
+  const toggleConversation = async () => {
+    // If microphone permission not granted, check it now
+    if (!permissionGranted) {
+      await checkMicrophonePermission();
+      // If that didn't work, don't proceed
+      if (!permissionGranted) {
+        return;
+      }
+    }
+    
     const newConversationState = !conversationStarted;
     setConversationStarted(newConversationState);
     
     if (newConversationState) {
-      // Starting conversation
+      // Starting conversation - make sure we have a valid recognition instance
+      if (!recognitionRef.current) {
+        setupRecognition();
+      }
+      
+      // Start listening if we're not already
       if (!isRecognitionActiveRef.current && !isProcessing) {
         startListening();
       }
