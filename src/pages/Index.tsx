@@ -30,8 +30,24 @@ const Index = () => {
       return;
     }
     
+    // Check microphone permission on initial load
     checkMicrophonePermission();
-  }, [toast]);
+    
+    // Add event listener for when the page becomes visible again
+    // This helps when the user switches tabs to change permissions
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+  
+  const handleVisibilityChange = () => {
+    // When the user comes back to this tab, check permissions again
+    if (document.visibilityState === 'visible') {
+      checkMicrophonePermission();
+    }
+  };
 
   const checkMicrophonePermission = async () => {
     try {
@@ -63,10 +79,11 @@ const Index = () => {
             variant: "destructive",
           });
         } else if (permissionStatus.state === 'prompt') {
-          // We'll prompt again when user starts conversation
+          // Show dialog to encourage user to grant permission
+          setShowPermissionDialog(true);
           toast({
             title: "Microphone permission needed",
-            description: "You'll need to allow microphone access when prompted.",
+            description: "You'll need to allow microphone access to use the speech features.",
           });
         }
         
@@ -80,6 +97,8 @@ const Index = () => {
               title: "Microphone access granted",
               description: "You can now start the conversation with your AI therapist.",
             });
+            // Force a reload to reinitialize everything with new permissions
+            window.location.reload();
           } else if (permissionStatus.state === 'denied') {
             setShowPermissionDialog(true);
             toast({
@@ -101,6 +120,7 @@ const Index = () => {
   const requestMicrophoneAccess = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
       // If we got here, permission was granted
       stream.getTracks().forEach(track => track.stop()); // Clean up
       
@@ -111,14 +131,14 @@ const Index = () => {
         description: "You can now start the conversation with your AI therapist.",
       });
       
-      // Force a reload to make sure all components reinitialize correctly
+      // Force a reload to make sure all components reinitialize correctly with the new permissions
       window.location.reload();
     } catch (err) {
       console.error('Microphone access error:', err);
       setMicrophonePermission('denied');
       toast({
         title: "Microphone access denied",
-        description: "Please allow microphone access to use the speech features.",
+        description: "Please allow microphone access in your browser settings and refresh the page.",
         variant: "destructive",
       });
     }
@@ -145,6 +165,7 @@ const Index = () => {
                   <li>Select "Allow" for microphone access</li>
                   <li>After allowing access, click "Try Again" button below</li>
                 </ul>
+                <p className="mt-2 font-semibold">Important: If you've already granted permission but are still seeing this message, try clicking "Try Again" or refreshing the page.</p>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

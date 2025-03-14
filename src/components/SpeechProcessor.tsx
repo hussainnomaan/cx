@@ -33,6 +33,8 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [conversationStarted, setConversationStarted] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
+  const [permissionCheckInProgress, setPermissionCheckInProgress] = useState(false);
+  
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -40,8 +42,9 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
   const startAttemptTimeoutRef = useRef<number | null>(null);
   const isRecognitionActiveRef = useRef<boolean>(false);
 
-  // Initialize AudioContext
+  // Initialize AudioContext and check permissions
   useEffect(() => {
+    // Initialize AudioContext
     if (!audioContextRef.current) {
       try {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -55,10 +58,15 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       }
     }
     
-    // Check for microphone permission immediately
+    // Check for microphone permission on component mount
     checkMicrophonePermission();
     
+    // Add event listener for page visibility changes
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      
       // Clean up audio resources
       if (audioSourceRef.current) {
         try {
@@ -82,38 +90,9 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       if (startAttemptTimeoutRef.current) {
         window.clearTimeout(startAttemptTimeoutRef.current);
       }
-    };
-  }, []);
-
-  // Check microphone permission
-  const checkMicrophonePermission = async () => {
-    try {
-      // Directly try to access microphone to trigger permission prompt
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      // If we got here, permission was granted
-      setPermissionGranted(true);
-      // Clean up the stream
-      stream.getTracks().forEach(track => track.stop());
-      
-      // Now safe to set up recognition
-      setupRecognition();
-    } catch (error) {
-      console.error("Error getting microphone access:", error);
-      setPermissionGranted(false);
-      toast({
-        title: "Microphone Access Required",
-        description: "Please allow microphone access to use the voice features.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  // Clean up recognition on unmount
-  useEffect(() => {
-    return () => {
-      // Cleanup function
-      if (recognitionRef.current) {
+      // Stop recognition if active
+      if (recognitionRef.current && isRecognitionActiveRef.current) {
         try {
           stopListening(true);
         } catch (error) {
@@ -122,21 +101,91 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       }
     };
   }, []);
+  
+  // Handle page visibility changes
+  const handleVisibilityChange = () => {
+    // When the user returns to this tab
+    if (document.visibilityState === 'visible') {
+      // Check permissions again
+      checkMicrophonePermission();
+      
+      // If conversation was active but recognition isn't, restart it
+      if (conversationStarted && !isRecognitionActiveRef.current && !isProcessing) {
+        // Recreate recognition instance to ensure it's fresh
+        recreateRecognitionIfNeeded();
+        
+        // Add small delay before trying to restart
+        setTimeout(() => {
+          if (conversationStarted && !isRecognitionActiveRef.current && !isProcessing && permissionGranted) {
+            startListening();
+          }
+        }, 500);
+      }
+    }
+  };
+
+  // Check microphone permission
+  const checkMicrophonePermission = async () => {
+    // Avoid multiple simultaneous permission checks
+    if (permissionCheckInProgress) return;
+    
+    setPermissionCheckInProgress(true);
+    
+    try {
+      // Directly try to access microphone to trigger permission prompt
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // If we got here, permission was granted
+      setPermissionGranted(true);
+      
+      // Clean up the stream
+      stream.getTracks().forEach(track => track.stop());
+      
+      // Now safe to set up recognition
+      setupRecognition();
+    } catch (error) {
+      console.error("Error getting microphone access:", error);
+      setPermissionGranted(false);
+      
+      toast({
+        title: "Microphone Access Required",
+        description: "Please allow microphone access to use the voice features.",
+        variant: "destructive"
+      });
+      
+      // Also end any active conversation
+      if (conversationStarted) {
+        setConversationStarted(false);
+      }
+    } finally {
+      setPermissionCheckInProgress(false);
+    }
+  };
 
   // Setup speech recognition and handle conversation state
   useEffect(() => {
     if (!permissionGranted) return;
     
-    // Start/stop listening based on conversationStarted state
+    // If we have permission but no recognition instance, set it up
+    if (!recognitionRef.current) {
+      setupRecognition();
+    }
+    
+    // Manage listening state based on conversation status
     if (conversationStarted && !isListening && !isProcessing && !isRecognitionActiveRef.current) {
-      startListening();
+      // Add a small delay to avoid rapid start/stop cycles
+      setTimeout(() => {
+        if (conversationStarted && !isRecognitionActiveRef.current && !isProcessing) {
+          startListening();
+        }
+      }, 300);
     } else if (!conversationStarted && (isListening || isRecognitionActiveRef.current)) {
       stopListening(true);
     }
   }, [conversationStarted, isListening, isProcessing, permissionGranted]);
 
   const setupRecognition = () => {
-    // Initialize speech recognition if it doesn't exist yet
+    // Initialize speech recognition if it doesn't exist yet and browser supports it
     if (!recognitionRef.current && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
       const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognitionAPI();
@@ -193,13 +242,18 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
           variant: "destructive"
         });
         setConversationStarted(false);
+        
+        // Check permission again after a short delay
+        setTimeout(() => {
+          checkMicrophonePermission();
+        }, 1000);
       } else if (conversationStarted && !isProcessing) {
         // Auto-restart on non-fatal errors after a brief delay
         if (startAttemptTimeoutRef.current) {
           window.clearTimeout(startAttemptTimeoutRef.current);
         }
         startAttemptTimeoutRef.current = window.setTimeout(() => {
-          if (conversationStarted && !isProcessing && !isRecognitionActiveRef.current) {
+          if (conversationStarted && !isProcessing && !isRecognitionActiveRef.current && permissionGranted) {
             console.info("Auto-restarting recognition after error");
             recreateRecognitionIfNeeded();
             startListening();
@@ -214,16 +268,16 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       isRecognitionActiveRef.current = false;
       
       // Auto-restart if conversation is active and we're not processing
-      if (conversationStarted && !isProcessing) {
+      if (conversationStarted && !isProcessing && permissionGranted) {
         console.info("Auto-restarting recognition after end");
         if (startAttemptTimeoutRef.current) {
           window.clearTimeout(startAttemptTimeoutRef.current);
         }
         startAttemptTimeoutRef.current = window.setTimeout(() => {
-          if (conversationStarted && !isProcessing && !isRecognitionActiveRef.current) {
+          if (conversationStarted && !isProcessing && !isRecognitionActiveRef.current && permissionGranted) {
             startListening();
           }
-        }, 300);
+        }, 500);
       }
     };
   };
@@ -236,6 +290,9 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       } catch (e) {
         console.log("Error stopping recognition during recreation:", e);
       }
+      
+      // Clear the reference to force creating a new instance
+      recognitionRef.current = null;
     }
     
     // Create a new recognition instance
@@ -249,6 +306,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
   };
 
   const startListening = () => {
+    // Skip if recognition is not set up, already active, or we're processing a response
     if (!recognitionRef.current || isRecognitionActiveRef.current || isProcessing) return;
     
     // Double-check microphone permission before starting
@@ -258,6 +316,16 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     }
     
     try {
+      // Make sure we don't have an existing recognition session
+      if (isRecognitionActiveRef.current) {
+        try {
+          stopListening(true);
+        } catch (e) {
+          console.log("Error stopping existing recognition:", e);
+        }
+      }
+      
+      // Start a fresh recognition session
       recognitionRef.current.start();
       console.info("Started listening");
       onSpeechStart();
@@ -265,8 +333,8 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       console.error('Error starting speech recognition:', error);
       
       // If recognition is in an invalid state, recreate it
-      if (error instanceof DOMException && error.name === 'InvalidStateError') {
-        console.info("Recognition was in invalid state, recreating it");
+      if (error instanceof DOMException && (error.name === 'InvalidStateError' || error.name === 'NotAllowedError')) {
+        console.info("Recognition was in invalid state or not allowed, recreating it");
         recreateRecognitionIfNeeded();
         
         // Try again after a short delay
@@ -274,10 +342,10 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
           window.clearTimeout(startAttemptTimeoutRef.current);
         }
         startAttemptTimeoutRef.current = window.setTimeout(() => {
-          if (conversationStarted && !isProcessing && !isRecognitionActiveRef.current) {
+          if (conversationStarted && !isProcessing && !isRecognitionActiveRef.current && permissionGranted) {
             startListening();
           }
-        }, 500);
+        }, 800);
       }
     }
   };
@@ -290,6 +358,12 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       console.info("Stopped listening");
     } catch (error) {
       console.error("Error stopping speech recognition:", error);
+      
+      // If we can't stop it, recreate it for a fresh start next time
+      if (error instanceof DOMException && error.name === 'InvalidStateError') {
+        console.info("Recognition was in invalid state when stopping, recreating it");
+        recreateRecognitionIfNeeded();
+      }
     }
     
     isRecognitionActiveRef.current = false;
@@ -298,30 +372,11 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
   };
 
   const toggleConversation = async () => {
-    // If microphone permission not granted, check it now
-    if (!permissionGranted) {
-      await checkMicrophonePermission();
-      // If that didn't work, don't proceed
-      if (!permissionGranted) {
-        return;
-      }
-    }
-    
-    const newConversationState = !conversationStarted;
-    setConversationStarted(newConversationState);
-    
-    if (newConversationState) {
-      // Starting conversation - make sure we have a valid recognition instance
-      if (!recognitionRef.current) {
-        setupRecognition();
-      }
+    // If conversation is already started, just stop it
+    if (conversationStarted) {
+      setConversationStarted(false);
       
-      // Start listening if we're not already
-      if (!isRecognitionActiveRef.current && !isProcessing) {
-        startListening();
-      }
-    } else {
-      // Ending conversation
+      // Stop listening if active
       if (isRecognitionActiveRef.current) {
         stopListening(true);
       }
@@ -340,7 +395,37 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       }
       
       setIsProcessing(false);
+      return;
     }
+    
+    // Starting a new conversation
+    
+    // If microphone permission not granted, check it now
+    if (!permissionGranted) {
+      await checkMicrophonePermission();
+      // If that didn't work, don't proceed
+      if (!permissionGranted) {
+        return;
+      }
+    }
+    
+    // Start the conversation
+    setConversationStarted(true);
+    
+    // Make sure we have a valid recognition instance
+    if (!recognitionRef.current) {
+      setupRecognition();
+    } else {
+      // If we already have one, recreate it to ensure it's fresh
+      recreateRecognitionIfNeeded();
+    }
+    
+    // Start listening after a short delay to let the UI update
+    setTimeout(() => {
+      if (!isRecognitionActiveRef.current && !isProcessing && permissionGranted) {
+        startListening();
+      }
+    }, 500);
   };
 
   // Play audio using AudioContext API
@@ -388,15 +473,15 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
         setIsProcessing(false);
         
         // Only restart listening if conversation is still active
-        if (conversationStarted) {
+        if (conversationStarted && permissionGranted) {
           if (startAttemptTimeoutRef.current) {
             window.clearTimeout(startAttemptTimeoutRef.current);
           }
           startAttemptTimeoutRef.current = window.setTimeout(() => {
-            if (conversationStarted && !isListening && !isProcessing && !isRecognitionActiveRef.current) {
+            if (conversationStarted && !isListening && !isProcessing && !isRecognitionActiveRef.current && permissionGranted) {
               startListening();
             }
-          }, 300);
+          }, 500);
         }
       };
       
@@ -418,15 +503,15 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       
       // Continue the conversation even if audio fails
       setIsProcessing(false);
-      if (conversationStarted) {
+      if (conversationStarted && permissionGranted) {
         if (startAttemptTimeoutRef.current) {
           window.clearTimeout(startAttemptTimeoutRef.current);
         }
         startAttemptTimeoutRef.current = window.setTimeout(() => {
-          if (conversationStarted && !isListening && !isProcessing && !isRecognitionActiveRef.current) {
+          if (conversationStarted && !isListening && !isProcessing && !isRecognitionActiveRef.current && permissionGranted) {
             startListening();
           }
-        }, 300);
+        }, 500);
       }
       
       return false;
@@ -483,7 +568,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
         
         // Resume listening after error if conversation is still active
         setIsProcessing(false);
-        if (conversationStarted && !isRecognitionActiveRef.current) {
+        if (conversationStarted && !isRecognitionActiveRef.current && permissionGranted) {
           startListening();
         }
       }
@@ -497,7 +582,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       
       // Resume listening after error if conversation is still active
       setIsProcessing(false);
-      if (conversationStarted && !isRecognitionActiveRef.current) {
+      if (conversationStarted && !isRecognitionActiveRef.current && permissionGranted) {
         startListening();
       }
     }
@@ -507,15 +592,17 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     <div className="w-full flex flex-col items-center">
       <button
         onClick={toggleConversation}
-        disabled={isProcessing}
+        disabled={isProcessing || permissionCheckInProgress}
         className={`mt-6 glass-button px-8 py-3 text-foreground font-medium transform transition-all duration-300 hover:scale-105 ${
           isListening ? 'bg-therapy-pink/30 ring-2 ring-therapy-pink' : 
           isProcessing ? 'bg-therapy-blue/20 opacity-70' : 
+          permissionCheckInProgress ? 'bg-gray-500/20 opacity-70' :
           conversationStarted ? 'bg-therapy-cyan/50' : 'bg-therapy-cyan/30'
         }`}
       >
         {isListening ? 'Listening...' : 
          isProcessing ? 'Processing...' : 
+         permissionCheckInProgress ? 'Checking microphone...' :
          conversationStarted ? 'End Conversation' : 'Start Conversation'}
       </button>
       
