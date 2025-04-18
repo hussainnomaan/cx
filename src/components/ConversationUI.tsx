@@ -20,7 +20,7 @@ const ConversationUI = () => {
     // Add initial greeting
     setTimeout(() => {
       const initialMessage: Message = {
-        text: "Hello, I'm here to listen and support you. How are you feeling today?",
+        text: "Hello I'm X, I'm here to listen to you. Anything on your mind lately?",
         sender: 'therapist',
         timestamp: new Date()
       };
@@ -78,7 +78,7 @@ const ConversationUI = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h1 className="text-3xl font-bold gradient-text mb-2">AI Therapist</h1>
+          <h1 className="text-7xl font-bold gradient-text mb-2">CompanionX</h1>
           <p className="text-muted-foreground text-center max-w-md mb-8">
             A safe space to talk about your feelings and thoughts
           </p>

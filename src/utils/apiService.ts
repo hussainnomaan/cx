@@ -7,8 +7,11 @@ interface LLMResponse {
 }
 
 // Pre-initialized API keys
-const groqApiKey = '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';
-const elevenLabsApiKey = 'sk_e47c0ef8a36ab64a793f871e54e14ca1c214c1e9eac65a61';
+const groqApiKey = import.meta.env.VITE_GROQ_API_KEY!;
+const elevenLabsApiKey = import.meta.env.VITE_ELEVENLABS_API_KEY!;
+
+
+
 
 // Getters for API keys (kept for backwards compatibility)
 export const getLlamaApiKey = () => groqApiKey;
@@ -41,7 +44,7 @@ export async function generateLLMResponse(userInput: string): Promise<LLMRespons
         messages: [
           {
             role: 'system',
-            content: 'You are an empathetic AI therapist. Respond to the user with compassion and understanding. Keep responses concise (under 100 words) and include an appropriate emotion tag at the end of your response in brackets like [happy], [sad], [empathetic], [neutral], [thinking], or [concerned].'
+            content: 'You are a good AI friend and therapist. Respond to the user with compassion and understanding. Keep responses concise and natural as a human.'
           },
           {
             role: 'user',
@@ -49,7 +52,7 @@ export async function generateLLMResponse(userInput: string): Promise<LLMRespons
           }
         ],
         temperature: 0.7,
-        max_tokens: 200,
+        max_tokens: 100,
       }),
     });
 
@@ -95,7 +98,7 @@ export async function generateLLMResponse(userInput: string): Promise<LLMRespons
 export async function convertTextToSpeech(text: string): Promise<ArrayBuffer | null> {
   try {
     console.log('Converting text to speech:', text);
-    const voiceId = "EXAVITQu4vr4xnSDxMaL"; // Sarah voice
+    const voiceId = "TRnaQb7q41oL7sV0w6Bu"; 
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
 
     const response = await fetch(url, {
@@ -106,10 +109,14 @@ export async function convertTextToSpeech(text: string): Promise<ArrayBuffer | n
       },
       body: JSON.stringify({
         text: text,
-        model_id: "eleven_monolingual_v1",
+        model_id: "eleven_multilingual_v2",
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
+        },
+        agent_settings:{
+          agent_language:"Hindi"
+
         }
       }),
     });
