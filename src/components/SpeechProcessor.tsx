@@ -559,15 +559,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     }
   };
 
-      onTherapistSpeaking(false);
-      onExpressionChange('neutral');
-      setIsProcessing(false);
-
-      if (conversationStarted && permissionGranted) {
-        setTimeout(() => startListening(), 600);
-      }
-    }
-  };
+     
   return (
     <div className="w-full flex flex-col items-center">
       <button
