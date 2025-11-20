@@ -520,66 +520,62 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
 
   const processUserMessage = async (userInput: string) => {
     if (!userInput.trim()) return;
-    
+
     setIsProcessing(true);
     onExpressionChange('thinking');
     console.info("Processing user message:", userInput);
-    
-    // Stop recognition while AI is processing
+
+    // Stop listening while she’s responding
     stopListening();
-    
+
+    let displayedText = "";
+
     try {
-      // Get response from LLM
-      console.info("Generating LLM response...");
-      const llmResponse = await generateLLMResponse(userInput);
-      console.info("LLM response received:", llmResponse);
-      
-      // Extract emotion from response
-      const expressionMatch = llmResponse.text.match(/\[(.*?)\]$/);
-      let responseText = llmResponse.text;
-      let expression = llmResponse.expression || 'neutral';
-      
-      if (expressionMatch) {
-        expression = expressionMatch[1];
-        responseText = llmResponse.text.replace(/\[(.*?)\]$/, '').trim();
-      }
-      
-      // Update expression based on LLM response
-      onExpressionChange(expression);
-      
-      // Add therapist message to conversation
-      onUserMessage(responseText);
-      
-      // Convert text to speech
-      console.info("Converting text to speech...");
-      const audioData = await convertTextToSpeech(responseText);
-      
-      if (audioData) {
-        console.info("Audio data received, playing...");
-        // Play the audio using AudioContext API
-        await playAudio(audioData);
-      } else {
-        console.error("No audio data received");
-        toast({
-          title: "Text-to-speech error",
-          description: "Failed to convert response to speech.",
-          variant: "destructive"
-        });
-        
-        // Resume listening after error if conversation is still active
-        setIsProcessing(false);
-        if (conversationStarted && !isRecognitionActiveRef.current && permissionGranted) {
-          startListening();
+      await streamResponseAndSpeak(
+        userInput,
+
+        // ← Text appears word-by-word instantly
+        (chunk: string) => {
+          displayedText += chunk;
+          onUserMessage(displayedText);        // this shows the text as it streams
+          onExpressionChange('speaking');
+        },
+
+        // ← Voice starts almost immediately
+        () => {
+          onTherapistSpeaking(true);
+          onExpressionChange('speaking');
+        },
+
+        // ← Everything finished
+        () => {
+          onTherapistSpeaking(false);
+          onExpressionChange('neutral');
+          setIsProcessing(false);
+
+          // Resume listening for the next thing you say
+          if (conversationStarted && permissionGranted) {
+            setTimeout(() => startListening(), 400);
+          }
         }
-      }
+      );
     } catch (error) {
-      console.error('Error processing message:', error);
+      console.error("Streaming error:", error);
       toast({
-        title: "Error",
-        description: "Failed to process your message. Please try again.",
-        variant: "destructive"
+        title: "Something went wrong",
+        description: "I'll be right back – try again in a sec ♡",
+        variant: "destructive",
       });
-      
+
+      onTherapistSpeaking(false);
+      onExpressionChange('neutral');
+      setIsProcessing(false);
+
+      if (conversationStarted && permissionGranted) {
+        setTimeout(() => startListening(), 600);
+      }
+    }
+  };
       // Resume listening after error if conversation is still active
       setIsProcessing(false);
       if (conversationStarted && !isRecognitionActiveRef.current && permissionGranted) {
