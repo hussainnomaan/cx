@@ -534,26 +534,26 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       await streamResponseAndSpeak(
         userInput,
 
-        // ← Text appears word-by-word instantly
+        // Text appears word-by-word instantly
         (chunk: string) => {
           displayedText += chunk;
-          onUserMessage(displayedText);        // this shows the text as it streams
+          onUserMessage(displayedText);
           onExpressionChange('speaking');
         },
 
-        // ← Voice starts almost immediately
+        // Voice starts almost immediately
         () => {
           onTherapistSpeaking(true);
           onExpressionChange('speaking');
         },
 
-        // ← Everything finished
+        // Everything finished
         () => {
           onTherapistSpeaking(false);
           onExpressionChange('neutral');
           setIsProcessing(false);
 
-          // Resume listening for the next thing you say
+          // Resume listening
           if (conversationStarted && permissionGranted) {
             setTimeout(() => startListening(), 400);
           }
@@ -562,8 +562,8 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     } catch (error) {
       console.error("Streaming error:", error);
       toast({
-        title: "Something went wrong",
-        description: "I'll be right back – try again in a sec ♡",
+        title: "Oops!",
+        description: "I'm having a moment… try again ♡",
         variant: "destructive",
       });
 
@@ -576,14 +576,6 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       }
     }
   };
-      // Resume listening after error if conversation is still active
-      setIsProcessing(false);
-      if (conversationStarted && !isRecognitionActiveRef.current && permissionGranted) {
-        startListening();
-      }
-    }
-  };
-
   return (
     <div className="w-full flex flex-col items-center">
       <button
