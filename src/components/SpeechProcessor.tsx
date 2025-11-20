@@ -28,32 +28,32 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
   const [transcript, setTranscript] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [conversationStarted, setConversationStarted] = useState(false);
-  const [permissionGranted, setPermissionGranted] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const isRecognitionActiveRef = useRef(false);
 
-  // Permission + Recognition Setup
+  // One-time mic permission
   useEffect(() => {
-    const checkPermission = async () => {
+    const init = async () => {
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
-        setPermissionGranted(true);
         setupRecognition();
       } catch {
-        toast({ title: "Mic access needed", description: "Please allow microphone", variant: "destructive" });
+        toast({ title: "Mic needed", description: "Allow microphone to talk", variant: "destructive" });
       }
     };
-    checkPermission();
+    init();
   }, []);
 
   const setupRecognition = () => {
-    if (recognitionRef.current || !('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) return;
+    if (recognitionRef.current) return;
+    if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) return;
 
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognitionRef.current = new SR();
     recognitionRef.current.continuous = true;
     recognitionRef.current.interimResults = true;
+    recognitionRef.current.lang = 'en-US';
 
     recognitionRef.current.onstart = () => {
       setIsListening(true);
@@ -63,7 +63,7 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     };
 
     recognitionRef.current.onresult = (e: any) => {
-      const result = e.results[e.resultIndex];
+      const result = e.results[e.results.length - 1];
       const text = result[0].transcript;
       setTranscript(text);
 
@@ -71,34 +71,32 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
         setTranscript('');
         onSpeechEnd();
         onUserMessage(text);
-        processUserMessage(text);
+        processUserMessage(text.trim());
       }
     };
 
-    recognitionRef.current.onerror = () => {
-      if (conversationStarted && !isProcessing) setTimeout(startListening, 500);
-    };
-
+    recognitionRef.current.onerror = () => restartListening();
     recognitionRef.current.onend = () => {
       setIsListening(false);
       isRecognitionActiveRef.current = false;
-      if (conversationStarted && !isProcessing) {
-        setTimeout(startListening, 400);
-      }
+      if (conversationStarted && !isProcessing) restartListening();
     };
   };
 
+  const restartListening = () => {
+    if (!conversationStarted || isProcessing || isRecognitionActiveRef.current) return;
+    setTimeout(() => {
+      try { recognitionRef.current?.start(); } catch {}
+    }, 300);
+  };
+
   const startListening = () => {
-    if (!recognitionRef.current || isRecognitionActiveRef.current || isProcessing) return;
-    try {
-      recognitionRef.current.start();
-    } catch {}
+    if (isRecognitionActiveRef.current || !recognitionRef.current) return;
+    try { recognitionRef.current.start(); } catch {}
   };
 
   const stopListening = () => {
-    if (recognitionRef.current && isRecognitionActiveRef.current) {
-      recognitionRef.current.stop();
-    }
+    if (recognitionRef.current) recognitionRef.current.stop();
   };
 
   const toggleConversation = () => {
@@ -109,69 +107,78 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
       onExpressionChange('neutral');
     } else {
       setConversationStarted(true);
-      setTimeout(startListening, 300);
+      setIsProcessing(false);
+      setTimeout(startListening, 400);
     }
   };
 
-  // THIS IS THE ONLY FUNCTION THAT SHOULD HANDLE VOICE + TEXT
   const processUserMessage = async (userInput: string) => {
-    if (!userInput.trim()) return;
+    if (!userInput) return;
 
     setIsProcessing(true);
     onExpressionChange('thinking');
     stopListening();
 
-    let fullResponse = "";
+    let fullText = "";
 
     try {
       await streamResponseAndSpeak(
         userInput,
         (chunk) => {
-          fullResponse += chunk;
+          fullText += chunk;
         },
         () => {
           onTherapistSpeaking(true);
           onExpressionChange('speaking');
         },
         () => {
-          onUserMessage(fullResponse);        // One clean message
+          onUserMessage(fullText);
           onTherapistSpeaking(false);
           onExpressionChange('neutral');
           setIsProcessing(false);
+
+          // ← THIS LINE KEEPS THE CONVERSATION GOING FOREVER
           if (conversationStarted) {
-            setTimeout(startListening, 500);
+            setTimeout(startListening, 600);
           }
         }
       );
     } catch (err) {
       console.error(err);
-      toast({ title: "Oops", description: "Try again ♡", variant: "destructive" });
+      toast({ title: "Try again", description: "I got stuck, let’s keep going ♡", variant: "destructive" });
       onTherapistSpeaking(false);
       onExpressionChange('neutral');
       setIsProcessing(false);
-      if (conversationStarted) setTimeout(startListening, 600);
+      if (conversationStarted) setTimeout(startListening, 800);
     }
   };
 
   return (
-    <div className="w-full flex flex-col items-center">
+    <div className="w-full flex flex-col items-center space-y-6">
       <button
         onClick={toggleConversation}
-        disabled={isProcessing}
-        className={`mt-6 glass-button px-8 py-3 font-medium transition-all hover:scale-105 ${
-          isListening ? 'bg-pink-500/40 ring-4 ring-pink-400' :
-          isProcessing ? 'bg-blue-500/30' :
-          conversationStarted ? 'bg-cyan-500/50' : 'bg-cyan-500/30'
+        className={`px-10 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 shadow-lg ${
+          conversationStarted
+            ? isListening
+              ? 'bg-pink-500 text-white animate-pulse'
+              : isProcessing
+              ? 'bg-blue-500 text-white'
+              : 'bg-red-500 text-white'
+            : 'bg-green-500 text-white'
         }`}
       >
-        {isListening ? 'Listening...' :
-         isProcessing ? 'Thinking...' :
-         conversationStarted ? 'End Chat' : 'Start Talking'}
+        {conversationStarted
+          ? isListening
+            ? 'Listening…'
+            : isProcessing
+            ? 'Speaking…'
+            : 'End Conversation'
+          : 'Start Talking'}
       </button>
 
       {transcript && (
-        <div className="mt-4 glass-panel px-6 py-3 text-sm">
-          <p>{transcript}...</p>
+        <div className="bg-white/10 backdrop-blur rounded-2xl px-6 py-3 text-lg animate-pulse">
+          {transcript}...
         </div>
       )}
     </div>
