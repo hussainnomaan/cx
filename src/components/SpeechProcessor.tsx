@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { toast } from "@/components/ui/use-toast";
 import { generateLLMResponse, convertTextToSpeech } from '@/utils/apiService';
+import { streamResponseAndSpeak } from '@/utils/apiService';
 
 // Add SpeechRecognition to window interface
 declare global {
