@@ -519,54 +519,45 @@ const SpeechProcessor: React.FC<SpeechProcessorProps> = ({
     }
   };
 
-  const processUserMessage = async (userInput: string) => {
+   const processUserMessage = async (userInput: string) => {
     if (!userInput.trim()) return;
 
     setIsProcessing(true);
     onExpressionChange('thinking');
-    console.info("Processing user message:", userInput);
-
-    // Stop listening while she’s responding
     stopListening();
 
-    let displayedText = "";
+    let fullResponse = "";
 
     try {
       await streamResponseAndSpeak(
         userInput,
-
-        // Text appears word-by-word instantly
-        (chunk: string) => {
-          displayedText += chunk;
-          onUserMessage(displayedText);
-          onExpressionChange('speaking');
+        (chunk) => {
+          fullResponse += chunk;
+          // Do nothing here — no spam
         },
-
-        // Voice starts almost immediately
         () => {
           onTherapistSpeaking(true);
           onExpressionChange('speaking');
         },
-
-        // Everything finished
         () => {
+          // One clean message when done
+          onUserMessage(fullResponse);
+
           onTherapistSpeaking(false);
           onExpressionChange('neutral');
           setIsProcessing(false);
-
-          // Resume listening
           if (conversationStarted && permissionGranted) {
             setTimeout(() => startListening(), 400);
           }
         }
       );
     } catch (error) {
-      console.error("Streaming error:", error);
-      toast({
-        title: "Oops!",
-        description: "I'm having a moment… try again ♡",
-        variant: "destructive",
-      });
+      toast({ title: "Oops", description: "Try again ♡", variant: "destructive" });
+      setIsProcessing(false);
+      onExpressionChange('neutral');
+      if (conversationStarted && permissionGranted) startListening();
+    }
+  };
 
       onTherapistSpeaking(false);
       onExpressionChange('neutral');
