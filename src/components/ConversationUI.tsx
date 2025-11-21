@@ -78,9 +78,9 @@ const ConversationUI = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <h1 className="text-7xl font-bold gradient-text mb-2">CompanionX</h1>
+          <h1 className="text-7xl font-bold gradient-text mb-2">Lira</h1>
           <p className="text-muted-foreground text-center max-w-md mb-8">
-            A safe space to talk about your feelings and thoughts
+            Your AI Best Friend
           </p>
           
           {/* Avatar */}
